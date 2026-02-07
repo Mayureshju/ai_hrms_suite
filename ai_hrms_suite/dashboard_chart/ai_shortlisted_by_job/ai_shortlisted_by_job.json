@@ -1,0 +1,21 @@
+{
+  "based_on": "",
+  "chart_name": "AI Shortlisted by Job",
+  "chart_type": "Group By",
+  "doctype": "Dashboard Chart",
+  "document_type": "Job Applicant",
+  "dynamic_filters_json": "[]",
+  "filters_json": "[[\"Job Applicant\",\"ai_shortlisted\",\"=\",1,false]]",
+  "group_by_based_on": "job_title",
+  "group_by_type": "Count",
+  "is_public": 1,
+  "is_standard": 1,
+  "module": "AI HRMS Suite",
+  "name": "AI Shortlisted by Job",
+  "number_of_groups": 10,
+  "time_interval": "Monthly",
+  "timeseries": 0,
+  "timespan": "Last Year",
+  "type": "Bar",
+  "use_report_chart": 0
+}

@@ -8,6 +8,12 @@ from ai_hrms_suite.ai.router import AIRouter
 from ai_hrms_suite.extractors.pdf_text import extract_pdf_text
 from ai_hrms_suite.extractors.docx_text import extract_docx_text
 from ai_hrms_suite.utils.hashing import sha256_text
+from ai_hrms_suite.utils.shortlist import (
+    get_shortlist_threshold,
+    should_shortlist,
+    get_shortlist_email_recipients,
+)
+from ai_hrms_suite.utils.config import get_conf
 
 
 def enqueue_parse_for_applicant(applicant_id: str):
@@ -192,6 +198,58 @@ def _save_scorecard(applicant_id: str, job_opening_id: str, scored: dict, llm_re
     doc.save(ignore_permissions=True)
 
     _log_run("score_resume", llm_result, status="Success", error="", cache_hit=cache_hit)
+
+    _apply_shortlist(applicant_id, job_opening_id, doc.name, float(scored["match_score"]))
+
+
+def _apply_shortlist(applicant_id: str, job_opening_id: str, scorecard_name: str, match_score: float):
+    if not frappe.db.exists("Job Applicant", applicant_id):
+        return
+
+    threshold = get_shortlist_threshold(job_opening_id)
+    shortlisted = should_shortlist(match_score, threshold)
+
+    values = {
+        "ai_shortlisted": 1 if shortlisted else 0,
+        "ai_match_score": float(match_score),
+    }
+    if shortlisted:
+        values["ai_shortlisted_on"] = frappe.utils.now_datetime()
+
+    frappe.db.set_value("Job Applicant", applicant_id, values, update_modified=True)
+
+    if not shortlisted:
+        return
+
+    if not int(get_conf("ai_hrms_shortlist_send_email", 0) or 0):
+        return
+
+    applicant = frappe.get_doc("Job Applicant", applicant_id)
+    if int(getattr(applicant, "ai_shortlist_notified", 0) or 0):
+        return
+
+    recipients = get_shortlist_email_recipients(applicant)
+    if not recipients:
+        return
+
+    subject = get_conf("ai_hrms_shortlist_email_subject", "Shortlisted for interview")
+    context = {
+        "applicant_name": getattr(applicant, "applicant_name", ""),
+        "job_title": getattr(applicant, "job_title", ""),
+        "company_name": frappe.defaults.get_global_default("company") or "",
+        "scorecard": scorecard_name,
+        "match_score": match_score,
+        "threshold": threshold,
+    }
+    message = frappe.render_template("ai_hrms_suite/templates/emails/ai_shortlist_candidate.html", context)
+    if not frappe.db.exists("Email Account", {"enable_outgoing": 1}):
+        return
+
+    try:
+        frappe.sendmail(recipients=recipients, subject=subject, message=message)
+        frappe.db.set_value("Job Applicant", applicant_id, "ai_shortlist_notified", 1, update_modified=False)
+    except frappe.exceptions.OutgoingEmailError:
+        return
 
 
 def _log_run(run_type: str, llm_result, status: str, error: str = "", cache_hit: bool = False):
