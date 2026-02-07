@@ -1,5 +1,1 @@
-from frappe.model.document import Document
-
-
-class AIScreeningScorecard(Document):
-    pass
+from ai_hrms_suite.doctype.ai_screening_scorecard.ai_screening_scorecard import AIScreeningScorecard

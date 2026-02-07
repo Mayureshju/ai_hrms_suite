@@ -22,7 +22,8 @@ def enqueue_parse_for_applicant(applicant_id: str):
         "ai_hrms_suite.ai.pipeline.parse_resume_for_applicant",
         queue="long",
         applicant_id=applicant_id,
-        job_name=f"ai_parse_resume::{applicant_id}"
+        job_name=f"ai_parse_resume::{applicant_id}",
+        enqueue_after_commit=True
     )
 
 
@@ -31,7 +32,8 @@ def enqueue_rescore_for_job_opening(job_opening_id: str):
         "ai_hrms_suite.ai.pipeline.rescore_job_opening",
         queue="long",
         job_opening_id=job_opening_id,
-        job_name=f"ai_rescore_job::{job_opening_id}"
+        job_name=f"ai_rescore_job::{job_opening_id}",
+        enqueue_after_commit=True
     )
 
 
@@ -43,6 +45,8 @@ def _render_prompt(template_name: str, **kwargs) -> str:
 
 
 def parse_resume_for_applicant(applicant_id: str):
+    if not frappe.db.exists("Job Applicant", applicant_id):
+        return
     applicant = frappe.get_doc("Job Applicant", applicant_id)
     file_url = getattr(applicant, "resume", None) or getattr(applicant, "resume_attachment", None)
     if not file_url:
@@ -89,6 +93,10 @@ def parse_resume_for_applicant(applicant_id: str):
 
 
 def score_applicant_for_job(applicant_id: str, job_opening_id: str):
+    if not frappe.db.exists("Job Applicant", applicant_id):
+        return
+    if not frappe.db.exists("Job Opening", job_opening_id):
+        return
     applicant = frappe.get_doc("Job Applicant", applicant_id)
     job = frappe.get_doc("Job Opening", job_opening_id)
 

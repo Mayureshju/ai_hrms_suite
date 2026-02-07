@@ -1,5 +1,1 @@
-from frappe.model.document import Document
-
-
-class AIResumeParseResult(Document):
-    pass
+from ai_hrms_suite.doctype.ai_resume_parse_result.ai_resume_parse_result import AIResumeParseResult
