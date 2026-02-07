@@ -1,0 +1,19 @@
+{
+  "doctype": "DocType",
+  "name": "AI Resume Parse Result",
+  "module": "AI HRMS Suite",
+  "custom": 0,
+  "track_changes": 1,
+  "autoname": "format:AI-PARSE-{#####}",
+  "fields": [
+    { "fieldname": "ai_resume", "fieldtype": "Link", "label": "AI Resume", "options": "AI Resume", "reqd": 1, "in_list_view": 1 },
+    { "fieldname": "provider", "fieldtype": "Data", "label": "Provider", "read_only": 1, "in_list_view": 1 },
+    { "fieldname": "model", "fieldtype": "Data", "label": "Model", "read_only": 1 },
+    { "fieldname": "structured_json", "fieldtype": "Code", "label": "Structured JSON", "options": "JSON", "reqd": 1, "read_only": 1 },
+    { "fieldname": "raw_text", "fieldtype": "Long Text", "label": "Raw Text (Optional)", "read_only": 1 }
+  ],
+  "permissions": [
+    { "role": "HR Manager", "read": 1, "write": 0, "create": 0, "delete": 0, "report": 1, "export": 1, "print": 1, "share": 0 },
+    { "role": "HR User", "read": 1, "write": 0, "create": 0, "delete": 0, "report": 1, "export": 0, "print": 0, "share": 0 }
+  ]
+}

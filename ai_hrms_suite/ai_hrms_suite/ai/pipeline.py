@@ -1,0 +1,200 @@
+import os
+import json
+import frappe
+from jinja2 import Template
+
+from ai_hrms_suite.ai.schemas import RESUME_PARSE_SCHEMA, JD_MATCH_SCHEMA
+from ai_hrms_suite.ai.router import AIRouter
+from ai_hrms_suite.extractors.pdf_text import extract_pdf_text
+from ai_hrms_suite.extractors.docx_text import extract_docx_text
+from ai_hrms_suite.utils.hashing import sha256_text
+
+
+def enqueue_parse_for_applicant(applicant_id: str):
+    applicant = frappe.get_doc("Job Applicant", applicant_id)
+
+    # Try common resume fields (adjust if your instance uses a custom field)
+    file_url = getattr(applicant, "resume", None) or getattr(applicant, "resume_attachment", None)
+    if not file_url:
+        return
+
+    frappe.enqueue(
+        "ai_hrms_suite.ai.pipeline.parse_resume_for_applicant",
+        queue="long",
+        applicant_id=applicant_id,
+        job_name=f"ai_parse_resume::{applicant_id}"
+    )
+
+
+def enqueue_rescore_for_job_opening(job_opening_id: str):
+    frappe.enqueue(
+        "ai_hrms_suite.ai.pipeline.rescore_job_opening",
+        queue="long",
+        job_opening_id=job_opening_id,
+        job_name=f"ai_rescore_job::{job_opening_id}"
+    )
+
+
+def _render_prompt(template_name: str, **kwargs) -> str:
+    from frappe import get_app_path
+    path = os.path.join(get_app_path("ai_hrms_suite"), "ai", "prompts", template_name)
+    with open(path, "r", encoding="utf-8") as f:
+        return Template(f.read()).render(**kwargs)
+
+
+def parse_resume_for_applicant(applicant_id: str):
+    applicant = frappe.get_doc("Job Applicant", applicant_id)
+    file_url = getattr(applicant, "resume", None) or getattr(applicant, "resume_attachment", None)
+    if not file_url:
+        return
+
+    file_doc = frappe.get_doc("File", {"file_url": file_url})
+    file_path = file_doc.get_full_path()
+    filename = (file_doc.file_name or "").lower()
+
+    if filename.endswith(".pdf"):
+        resume_text = extract_pdf_text(file_path)
+    elif filename.endswith(".docx"):
+        resume_text = extract_docx_text(file_path)
+    else:
+        raise ValueError(f"Unsupported resume format: {file_doc.file_name}")
+
+    store_raw = bool(frappe.conf.get("ai_hrms_store_raw_text") or False)
+
+    extracted_hash = sha256_text(resume_text)
+
+    prompt = _render_prompt(
+        "resume_parse_v1.j2",
+        schema_json=json.dumps(RESUME_PARSE_SCHEMA),
+        resume_text=resume_text[: int(frappe.conf.get("ai_hrms_max_resume_chars") or 20000)]
+    )
+
+    router = AIRouter()
+    out = router.run_json_task("resume_parse", prompt=prompt, schema=RESUME_PARSE_SCHEMA, timeout_s=60)
+    parsed = out["data"]
+    llm_result = out["llm_result"]
+
+    ai_resume_name = _upsert_ai_resume(applicant_id, file_doc.name, extracted_hash, status="Done")
+    _save_parse_result(ai_resume_name, parsed, (resume_text if store_raw else ""), llm_result, cache_hit=out["cache_hit"])
+
+    job_opening = getattr(applicant, "job_opening", None) or getattr(applicant, "job_title", None)
+    if job_opening:
+        frappe.enqueue(
+            "ai_hrms_suite.ai.pipeline.score_applicant_for_job",
+            queue="long",
+            applicant_id=applicant_id,
+            job_opening_id=job_opening,
+            job_name=f"ai_score::{job_opening}::{applicant_id}"
+        )
+
+
+def score_applicant_for_job(applicant_id: str, job_opening_id: str):
+    applicant = frappe.get_doc("Job Applicant", applicant_id)
+    job = frappe.get_doc("Job Opening", job_opening_id)
+
+    resume_json = _get_latest_resume_json(applicant_id)
+    if not resume_json:
+        return
+
+    jd_text = getattr(job, "description", None) or getattr(job, "job_description", None) or ""
+
+    prompt = _render_prompt(
+        "jd_match_v1.j2",
+        schema_json=json.dumps(JD_MATCH_SCHEMA),
+        jd_text=jd_text[: int(frappe.conf.get("ai_hrms_max_resume_chars") or 20000)],
+        resume_json=json.dumps(resume_json, ensure_ascii=False)[: int(frappe.conf.get("ai_hrms_max_resume_chars") or 20000)]
+    )
+
+    router = AIRouter()
+    out = router.run_json_task("jd_match", prompt=prompt, schema=JD_MATCH_SCHEMA, timeout_s=60)
+    scored = out["data"]
+    llm_result = out["llm_result"]
+
+    _save_scorecard(applicant_id, job_opening_id, scored, llm_result, cache_hit=out["cache_hit"])
+
+
+def rescore_job_opening(job_opening_id: str):
+    applicants = frappe.get_all("Job Applicant", filters={"job_opening": job_opening_id}, pluck="name")
+    for a in applicants:
+        frappe.enqueue(
+            "ai_hrms_suite.ai.pipeline.score_applicant_for_job",
+            queue="long",
+            applicant_id=a,
+            job_opening_id=job_opening_id,
+            job_name=f"ai_score::{job_opening_id}::{a}"
+        )
+
+
+# ---------- Persistence helpers ----------
+
+def _upsert_ai_resume(applicant_id: str, file_id: str, text_hash: str, status: str = "Done") -> str:
+    existing = frappe.get_all("AI Resume", filters={"source_applicant": applicant_id}, pluck="name")
+    if existing:
+        doc = frappe.get_doc("AI Resume", existing[0])
+    else:
+        doc = frappe.new_doc("AI Resume")
+        doc.source_applicant = applicant_id
+
+    doc.resume_file = file_id
+    doc.extracted_text_hash = text_hash
+    doc.status = status
+    doc.parse_version = "v1"
+    doc.save(ignore_permissions=True)
+    return doc.name
+
+
+def _save_parse_result(ai_resume_name: str, parsed_json: dict, raw_text: str, llm_result, cache_hit: bool):
+    doc = frappe.new_doc("AI Resume Parse Result")
+    doc.ai_resume = ai_resume_name
+    doc.structured_json = json.dumps(parsed_json, ensure_ascii=False, indent=2)
+    doc.raw_text = raw_text or ""
+    doc.provider = getattr(llm_result, "provider", "cache") if llm_result else "cache"
+    doc.model = getattr(llm_result, "model", "cache") if llm_result else "cache"
+    doc.save(ignore_permissions=True)
+
+    _log_run("parse_resume", llm_result, status="Success", error="", cache_hit=cache_hit)
+
+
+def _get_latest_resume_json(applicant_id: str):
+    ai_resumes = frappe.get_all("AI Resume", filters={"source_applicant": applicant_id}, pluck="name")
+    if not ai_resumes:
+        return None
+    latest = frappe.get_all(
+        "AI Resume Parse Result",
+        filters={"ai_resume": ai_resumes[0]},
+        fields=["structured_json"],
+        order_by="creation desc",
+        limit=1
+    )
+    if not latest:
+        return None
+    return json.loads(latest[0]["structured_json"])
+
+
+def _save_scorecard(applicant_id: str, job_opening_id: str, scored: dict, llm_result, cache_hit: bool):
+    doc = frappe.new_doc("AI Screening Scorecard")
+    doc.applicant = applicant_id
+    doc.job_opening = job_opening_id
+    doc.match_score = float(scored["match_score"])
+    doc.strengths = "\n".join(scored.get("strengths", []))
+    doc.gaps = "\n".join(scored.get("gaps", []))
+    doc.risk_flags = "\n".join(scored.get("risk_flags", []))
+    doc.explanation = scored.get("explanation", "")
+    doc.score_version = "v1"
+    doc.save(ignore_permissions=True)
+
+    _log_run("score_resume", llm_result, status="Success", error="", cache_hit=cache_hit)
+
+
+def _log_run(run_type: str, llm_result, status: str, error: str = "", cache_hit: bool = False):
+    log = frappe.new_doc("AI Run Log")
+    log.run_type = run_type
+    log.provider = getattr(llm_result, "provider", "cache") if llm_result else "cache"
+    log.model = getattr(llm_result, "model", "cache") if llm_result else "cache"
+    log.tokens_in = int(getattr(llm_result, "tokens_in", 0) or 0) if llm_result else 0
+    log.tokens_out = int(getattr(llm_result, "tokens_out", 0) or 0) if llm_result else 0
+    log.cost_usd = float(getattr(llm_result, "cost_usd", 0.0) or 0.0) if llm_result else 0.0
+    log.latency_ms = int(getattr(llm_result, "latency_ms", 0) or 0) if llm_result else 0
+    log.status = status
+    log.error = error or ("CACHE_HIT" if cache_hit else "")
+    log.save(ignore_permissions=True)

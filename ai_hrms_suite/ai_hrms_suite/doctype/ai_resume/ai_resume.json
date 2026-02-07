@@ -1,0 +1,21 @@
+{
+  "doctype": "DocType",
+  "name": "AI Resume",
+  "module": "AI HRMS Suite",
+  "custom": 0,
+  "track_changes": 1,
+  "autoname": "format:AI-RES-{#####}",
+  "fields": [
+    { "fieldname": "source_applicant", "fieldtype": "Link", "label": "Job Applicant", "options": "Job Applicant", "reqd": 1, "in_list_view": 1 },
+    { "fieldname": "resume_file", "fieldtype": "Link", "label": "Resume File", "options": "File", "reqd": 1, "in_list_view": 1 },
+    { "fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "Draft\nQueued\nProcessing\nDone\nFailed", "default": "Done", "in_list_view": 1 },
+    { "fieldname": "extracted_text_hash", "fieldtype": "Data", "label": "Extracted Text Hash", "read_only": 1 },
+    { "fieldname": "parse_version", "fieldtype": "Data", "label": "Parse Version", "default": "v1", "read_only": 1 },
+    { "fieldname": "language", "fieldtype": "Data", "label": "Language", "read_only": 1 },
+    { "fieldname": "error_message", "fieldtype": "Small Text", "label": "Error Message", "read_only": 1 }
+  ],
+  "permissions": [
+    { "role": "HR Manager", "read": 1, "write": 1, "create": 1, "delete": 0, "report": 1, "export": 1, "print": 1, "share": 1 },
+    { "role": "HR User", "read": 1, "write": 0, "create": 0, "delete": 0, "report": 1, "export": 0, "print": 0, "share": 0 }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "doctype": "DocType",
+  "name": "AI Screening Scorecard",
+  "module": "AI HRMS Suite",
+  "custom": 0,
+  "track_changes": 1,
+  "autoname": "format:AI-SCORE-{#####}",
+  "fields": [
+    { "fieldname": "job_opening", "fieldtype": "Link", "label": "Job Opening", "options": "Job Opening", "reqd": 1, "in_list_view": 1 },
+    { "fieldname": "applicant", "fieldtype": "Link", "label": "Job Applicant", "options": "Job Applicant", "reqd": 1, "in_list_view": 1 },
+    { "fieldname": "match_score", "fieldtype": "Float", "label": "Match Score", "read_only": 1, "in_list_view": 1 },
+    { "fieldname": "strengths", "fieldtype": "Long Text", "label": "Strengths", "read_only": 1 },
+    { "fieldname": "gaps", "fieldtype": "Long Text", "label": "Gaps", "read_only": 1 },
+    { "fieldname": "risk_flags", "fieldtype": "Long Text", "label": "Risk Flags", "read_only": 1 },
+    { "fieldname": "explanation", "fieldtype": "Long Text", "label": "Explanation", "read_only": 1 },
+    { "fieldname": "score_version", "fieldtype": "Data", "label": "Score Version", "default": "v1", "read_only": 1 }
+  ],
+  "permissions": [
+    { "role": "HR Manager", "read": 1, "write": 0, "create": 0, "delete": 0, "report": 1, "export": 1, "print": 1, "share": 1 },
+    { "role": "HR User", "read": 1, "write": 0, "create": 0, "delete": 0, "report": 1, "export": 0, "print": 0, "share": 0 }
+  ]
+}
