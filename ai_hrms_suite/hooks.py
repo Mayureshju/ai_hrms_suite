@@ -7,10 +7,13 @@ app_license = "MIT"
 
 doc_events = {
     "Job Applicant": {
-        "after_insert": "ai_hrms_suite.api.hrms.on_job_applicant_created",
         "on_update": "ai_hrms_suite.api.hrms.on_job_applicant_updated",
     },
     "Job Opening": {
         "on_update": "ai_hrms_suite.api.hrms.on_job_opening_updated",
     }
+}
+
+doctype_js = {
+    "Interview": "public/js/interview.js",
 }

@@ -1,0 +1,10 @@
+{
+  "doctype": "Report",
+  "name": "AI Skill Gap Heatmap",
+  "report_name": "AI Skill Gap Heatmap",
+  "ref_doctype": "AI Screening Scorecard",
+  "module": "AI HRMS Suite",
+  "report_type": "Script Report",
+  "is_standard": "Yes",
+  "disabled": 0
+}

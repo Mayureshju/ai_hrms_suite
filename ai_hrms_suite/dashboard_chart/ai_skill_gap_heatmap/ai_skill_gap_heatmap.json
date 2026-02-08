@@ -1,0 +1,14 @@
+{
+  "chart_name": "AI Skill Gap Heatmap",
+  "chart_type": "Report",
+  "doctype": "Dashboard Chart",
+  "is_public": 1,
+  "is_standard": 1,
+  "module": "AI HRMS Suite",
+  "name": "AI Skill Gap Heatmap",
+  "report_name": "AI Skill Gap Heatmap",
+  "use_report_chart": 1,
+  "type": "Bar",
+  "filters_json": "[]",
+  "dynamic_filters_json": "[]"
+}

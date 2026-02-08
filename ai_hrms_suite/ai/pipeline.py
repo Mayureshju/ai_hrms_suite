@@ -221,6 +221,8 @@ def _apply_shortlist(applicant_id: str, job_opening_id: str, scorecard_name: str
     if not shortlisted:
         return
 
+    _maybe_create_interview(applicant_id, job_opening_id)
+
     if not int(get_conf("ai_hrms_shortlist_send_email", 0) or 0):
         return
 
@@ -250,6 +252,65 @@ def _apply_shortlist(applicant_id: str, job_opening_id: str, scorecard_name: str
         frappe.db.set_value("Job Applicant", applicant_id, "ai_shortlist_notified", 1, update_modified=False)
     except frappe.exceptions.OutgoingEmailError:
         return
+
+
+def _maybe_create_interview(applicant_id: str, job_opening_id: str):
+    if not int(get_conf("ai_hrms_auto_create_interview", 0) or 0):
+        return
+    if not frappe.db.exists("Job Opening", job_opening_id):
+        return
+
+    job = frappe.get_doc("Job Opening", job_opening_id)
+    if hasattr(job, "ai_interview_auto_create") and not int(job.get("ai_interview_auto_create") or 0):
+        return
+
+    existing = frappe.db.exists(
+        "Interview",
+        {"job_applicant": applicant_id, "job_opening": job_opening_id, "status": ["in", ["Pending", "Under Review"]]},
+    )
+    if existing:
+        return
+
+    interview_round = None
+    if hasattr(job, "ai_interview_round") and job.get("ai_interview_round"):
+        interview_round = job.get("ai_interview_round")
+    else:
+        interview_round = get_conf("ai_hrms_default_interview_round")
+
+    if not interview_round:
+        return
+
+    offset_days = None
+    if hasattr(job, "ai_interview_offset_days") and job.get("ai_interview_offset_days") is not None:
+        offset_days = int(job.get("ai_interview_offset_days") or 0)
+    else:
+        offset_days = int(get_conf("ai_hrms_interview_offset_days", 1) or 1)
+
+    from_time = None
+    if hasattr(job, "ai_interview_from_time") and job.get("ai_interview_from_time"):
+        from_time = job.get("ai_interview_from_time")
+    else:
+        from_time = get_conf("ai_hrms_interview_from_time")
+
+    to_time = None
+    if hasattr(job, "ai_interview_to_time") and job.get("ai_interview_to_time"):
+        to_time = job.get("ai_interview_to_time")
+    else:
+        to_time = get_conf("ai_hrms_interview_to_time")
+
+    if not from_time or not to_time:
+        return
+
+    scheduled_on = frappe.utils.add_days(frappe.utils.nowdate(), offset_days)
+
+    doc = frappe.new_doc("Interview")
+    doc.job_applicant = applicant_id
+    doc.interview_round = interview_round
+    doc.scheduled_on = scheduled_on
+    doc.from_time = from_time
+    doc.to_time = to_time
+    doc.status = "Pending"
+    doc.save(ignore_permissions=True)
 
 
 def _log_run(run_type: str, llm_result, status: str, error: str = "", cache_hit: bool = False):
