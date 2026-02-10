@@ -69,14 +69,14 @@ def parse_resume_for_applicant(applicant_id: str):
     else:
         raise ValueError(f"Unsupported resume format: {file_doc.file_name}")
 
-    store_raw = bool(frappe.conf.get("ai_hrms_store_raw_text") or False)
+    store_raw = bool(get_conf("store_raw_text", False))
 
     extracted_hash = sha256_text(resume_text)
 
     prompt = _render_prompt(
         "resume_parse_v1.j2",
         schema_json=json.dumps(RESUME_PARSE_SCHEMA),
-        resume_text=resume_text[: int(frappe.conf.get("ai_hrms_max_resume_chars") or 20000)]
+        resume_text=resume_text[: int(get_conf("max_resume_chars", 20000))]
     )
 
     router = AIRouter()
@@ -115,8 +115,8 @@ def score_applicant_for_job(applicant_id: str, job_opening_id: str):
     prompt = _render_prompt(
         "jd_match_v1.j2",
         schema_json=json.dumps(JD_MATCH_SCHEMA),
-        jd_text=jd_text[: int(frappe.conf.get("ai_hrms_max_resume_chars") or 20000)],
-        resume_json=json.dumps(resume_json, ensure_ascii=False)[: int(frappe.conf.get("ai_hrms_max_resume_chars") or 20000)]
+        jd_text=jd_text[: int(get_conf("max_resume_chars", 20000))],
+        resume_json=json.dumps(resume_json, ensure_ascii=False)[: int(get_conf("max_resume_chars", 20000))]
     )
 
     router = AIRouter()

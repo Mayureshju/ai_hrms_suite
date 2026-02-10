@@ -1,0 +1,277 @@
+{
+  "doctype": "DocType",
+  "name": "AI HRMS Settings",
+  "module": "AI HRMS Suite",
+  "issingle": 1,
+  "custom": 0,
+  "track_changes": 1,
+  "fields": [
+    {
+      "fieldname": "api_keys_section",
+      "fieldtype": "Section Break",
+      "label": "API Keys"
+    },
+    {
+      "fieldname": "openrouter_api_key",
+      "fieldtype": "Password",
+      "label": "OpenRouter API Key"
+    },
+    {
+      "fieldname": "openrouter_base_url",
+      "fieldtype": "Data",
+      "label": "OpenRouter Base URL",
+      "default": "https://openrouter.ai/api/v1"
+    },
+    {
+      "fieldname": "openrouter_site_url",
+      "fieldtype": "Data",
+      "label": "OpenRouter Site URL",
+      "description": "HTTP-Referer header sent with OpenRouter requests"
+    },
+    {
+      "fieldname": "openrouter_app_name",
+      "fieldtype": "Data",
+      "label": "OpenRouter App Name",
+      "default": "AI HRMS Suite"
+    },
+    {
+      "fieldname": "col_break_api_1",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "openai_api_key",
+      "fieldtype": "Password",
+      "label": "OpenAI API Key"
+    },
+    {
+      "fieldname": "openai_base_url",
+      "fieldtype": "Data",
+      "label": "OpenAI Base URL",
+      "default": "https://api.openai.com/v1"
+    },
+    {
+      "fieldname": "sec_break_api_2",
+      "fieldtype": "Section Break"
+    },
+    {
+      "fieldname": "anthropic_api_key",
+      "fieldtype": "Password",
+      "label": "Anthropic API Key"
+    },
+    {
+      "fieldname": "anthropic_base_url",
+      "fieldtype": "Data",
+      "label": "Anthropic Base URL",
+      "default": "https://api.anthropic.com"
+    },
+    {
+      "fieldname": "anthropic_version",
+      "fieldtype": "Data",
+      "label": "Anthropic API Version",
+      "default": "2023-06-01"
+    },
+    {
+      "fieldname": "anthropic_max_tokens",
+      "fieldtype": "Int",
+      "label": "Anthropic Max Tokens",
+      "default": "1200"
+    },
+    {
+      "fieldname": "col_break_api_2",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "gemini_api_key",
+      "fieldtype": "Password",
+      "label": "Gemini API Key"
+    },
+    {
+      "fieldname": "gemini_base_url",
+      "fieldtype": "Data",
+      "label": "Gemini Base URL",
+      "default": "https://generativelanguage.googleapis.com"
+    },
+    {
+      "fieldname": "general_section",
+      "fieldtype": "Section Break",
+      "label": "General Settings"
+    },
+    {
+      "fieldname": "enable_cache",
+      "fieldtype": "Check",
+      "label": "Enable AI Cache",
+      "default": "1"
+    },
+    {
+      "fieldname": "budget_usd_per_day",
+      "fieldtype": "Float",
+      "label": "Daily Budget (USD)",
+      "default": "10",
+      "precision": "2",
+      "description": "Set to 0 to disable budget limit"
+    },
+    {
+      "fieldname": "col_break_general",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "max_resume_chars",
+      "fieldtype": "Int",
+      "label": "Max Resume Characters",
+      "default": "20000"
+    },
+    {
+      "fieldname": "max_prompt_tokens",
+      "fieldtype": "Int",
+      "label": "Max Prompt Tokens",
+      "default": "6000"
+    },
+    {
+      "fieldname": "store_raw_text",
+      "fieldtype": "Check",
+      "label": "Store Raw Resume Text",
+      "default": "0"
+    },
+    {
+      "fieldname": "shortlist_section",
+      "fieldtype": "Section Break",
+      "label": "Shortlisting",
+      "collapsible": 1
+    },
+    {
+      "fieldname": "shortlist_threshold",
+      "fieldtype": "Float",
+      "label": "Shortlist Threshold Score",
+      "default": "70",
+      "precision": "1"
+    },
+    {
+      "fieldname": "shortlist_send_email",
+      "fieldtype": "Check",
+      "label": "Send Shortlist Email",
+      "default": "0"
+    },
+    {
+      "fieldname": "shortlist_email_subject",
+      "fieldtype": "Data",
+      "label": "Shortlist Email Subject",
+      "default": "Shortlisted for interview",
+      "depends_on": "eval:doc.shortlist_send_email"
+    },
+    {
+      "fieldname": "col_break_shortlist",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "shortlist_email_recipients",
+      "fieldtype": "Small Text",
+      "label": "Shortlist Email Recipients",
+      "description": "Comma-separated emails. Leave blank to email the applicant.",
+      "depends_on": "eval:doc.shortlist_send_email"
+    },
+    {
+      "fieldname": "interview_section",
+      "fieldtype": "Section Break",
+      "label": "Interview Auto-Creation",
+      "collapsible": 1
+    },
+    {
+      "fieldname": "auto_create_interview",
+      "fieldtype": "Check",
+      "label": "Auto Create Interview",
+      "default": "0"
+    },
+    {
+      "fieldname": "default_interview_round",
+      "fieldtype": "Link",
+      "label": "Default Interview Round",
+      "options": "Interview Round",
+      "depends_on": "eval:doc.auto_create_interview"
+    },
+    {
+      "fieldname": "interview_offset_days",
+      "fieldtype": "Int",
+      "label": "Interview Offset Days",
+      "default": "1",
+      "depends_on": "eval:doc.auto_create_interview"
+    },
+    {
+      "fieldname": "col_break_interview",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "interview_from_time",
+      "fieldtype": "Time",
+      "label": "Interview From Time",
+      "depends_on": "eval:doc.auto_create_interview"
+    },
+    {
+      "fieldname": "interview_to_time",
+      "fieldtype": "Time",
+      "label": "Interview To Time",
+      "depends_on": "eval:doc.auto_create_interview"
+    },
+    {
+      "fieldname": "interview_availability_section",
+      "fieldtype": "Section Break",
+      "label": "Interview Availability Suggestions",
+      "collapsible": 1
+    },
+    {
+      "fieldname": "interview_slot_minutes",
+      "fieldtype": "Int",
+      "label": "Interview Slot Duration (minutes)",
+      "default": "60"
+    },
+    {
+      "fieldname": "interview_suggestion_days",
+      "fieldtype": "Int",
+      "label": "Suggestion Window (days)",
+      "default": "7"
+    },
+    {
+      "fieldname": "interview_suggestion_limit",
+      "fieldtype": "Int",
+      "label": "Max Slot Suggestions",
+      "default": "10"
+    },
+    {
+      "fieldname": "col_break_availability",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "interview_work_start_time",
+      "fieldtype": "Time",
+      "label": "Work Start Time",
+      "default": "09:00:00"
+    },
+    {
+      "fieldname": "interview_work_end_time",
+      "fieldtype": "Time",
+      "label": "Work End Time",
+      "default": "18:00:00"
+    },
+    {
+      "fieldname": "model_policies_section",
+      "fieldtype": "Section Break",
+      "label": "Model Policies",
+      "description": "Configure which LLM provider + model to use for each AI task. Add multiple rows per task for fallback tiers (lower priority = tried first)."
+    },
+    {
+      "fieldname": "model_policies",
+      "fieldtype": "Table",
+      "label": "Model Policies",
+      "options": "AI Model Policy",
+      "reqd": 0
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 0
+    }
+  ]
+}

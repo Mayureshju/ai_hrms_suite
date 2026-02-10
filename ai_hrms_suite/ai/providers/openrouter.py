@@ -1,20 +1,21 @@
 import time
 import requests
-import frappe
 from ai_hrms_suite.ai.providers.base import LLMProvider, LLMResult
+from ai_hrms_suite.utils.config import get_provider_config
 
 
 class OpenRouterProvider(LLMProvider):
     name = "openrouter"
 
     def complete_json(self, prompt: str, json_schema, model: str, timeout_s: int = 60) -> LLMResult:
-        api_key = frappe.conf.get("openrouter_api_key") or frappe.get_site_config().get("openrouter_api_key")
+        cfg = get_provider_config("openrouter")
+        api_key = cfg.get("api_key")
         if not api_key:
-            raise ValueError("Missing openrouter_api_key in site_config.json")
+            raise ValueError("Missing OpenRouter API key in AI HRMS Settings")
 
-        base_url = frappe.conf.get("openrouter_base_url") or "https://openrouter.ai/api/v1"
-        site_url = frappe.conf.get("openrouter_site_url") or ""
-        app_name = frappe.conf.get("openrouter_app_name") or "AI HRMS Suite"
+        base_url = cfg.get("base_url") or "https://openrouter.ai/api/v1"
+        site_url = cfg.get("site_url") or ""
+        app_name = cfg.get("app_name") or "AI HRMS Suite"
 
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -45,7 +46,6 @@ class OpenRouterProvider(LLMProvider):
         content = data["choices"][0]["message"]["content"]
         usage = data.get("usage") or {}
 
-        # OpenRouter sometimes includes "cost" in response; if not, keep 0.
         return LLMResult(
             text=content,
             model=model,

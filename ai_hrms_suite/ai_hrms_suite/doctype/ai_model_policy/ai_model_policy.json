@@ -1,0 +1,41 @@
+{
+  "doctype": "DocType",
+  "name": "AI Model Policy",
+  "module": "AI HRMS Suite",
+  "istable": 1,
+  "custom": 0,
+  "fields": [
+    {
+      "fieldname": "task_name",
+      "fieldtype": "Select",
+      "label": "Task Name",
+      "options": "resume_parse\njd_match\nintent_analysis\nresponse_gen",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "provider",
+      "fieldtype": "Select",
+      "label": "Provider",
+      "options": "openai\nanthropic\ngemini\nopenrouter",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "model",
+      "fieldtype": "Data",
+      "label": "Model",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "priority",
+      "fieldtype": "Int",
+      "label": "Priority",
+      "default": "1",
+      "description": "Lower number = tried first. Multiple rows per task = fallback tiers.",
+      "in_list_view": 1
+    }
+  ],
+  "permissions": []
+}

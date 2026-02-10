@@ -1,13 +1,15 @@
 import frappe
 from datetime import date
 
+from ai_hrms_suite.utils.config import get_conf
+
 
 def _today_key() -> str:
     return date.today().isoformat()
 
 
 def get_daily_budget_usd() -> float:
-    return float(frappe.conf.get("ai_hrms_budget_usd_per_day") or 0.0)
+    return float(get_conf("budget_usd_per_day", 0) or 0.0)
 
 
 def get_spent_today_usd() -> float:
