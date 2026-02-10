@@ -1,0 +1,18 @@
+{
+  "doctype": "DocType",
+  "name": "AI Chat Session",
+  "module": "AI HRMS Suite",
+  "custom": 0,
+  "track_changes": 1,
+  "autoname": "format:AI-CHAT-{#####}",
+  "fields": [
+    { "fieldname": "user", "fieldtype": "Link", "label": "User", "options": "User", "reqd": 1, "read_only": 1, "in_list_view": 1 },
+    { "fieldname": "title", "fieldtype": "Data", "label": "Title", "in_list_view": 1 },
+    { "fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "Active\nArchived", "default": "Active", "in_list_view": 1 },
+    { "fieldname": "last_message_on", "fieldtype": "Datetime", "label": "Last Message On", "read_only": 1 }
+  ],
+  "permissions": [
+    { "role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1, "report": 1, "export": 1, "print": 1, "share": 1 },
+    { "role": "All", "read": 1, "write": 1, "create": 1, "delete": 0, "report": 0, "export": 0, "print": 0, "share": 0, "if_owner": 1 }
+  ]
+}
