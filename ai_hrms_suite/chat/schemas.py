@@ -15,7 +15,7 @@ INTENT_SCHEMA = {
             "enum": [
                 "greeting",           # hi / hello / thanks
                 "question",            # any informational HRMS query
-                "action_request",      # create / update / delete (Phase 2)
+                "action_request",      # create / update / delete (agentic)
                 "report_request",      # aggregate data / analytics
                 "navigation",          # "where do I find X"
                 "clarification",       # follow-up / disambiguation
@@ -57,6 +57,7 @@ INTENT_SCHEMA = {
                             "status",
                             "department",
                             "designation",
+                            "leave_type",
                             "other",
                         ],
                     },
@@ -66,7 +67,7 @@ INTENT_SCHEMA = {
                 "required": ["type", "value"],
                 "additionalProperties": False,
             },
-            "maxItems": 6,
+            "maxItems": 8,
         },
         "tools": {
             "type": "array",
@@ -80,6 +81,7 @@ INTENT_SCHEMA = {
                             "list_records",
                             "count_records",
                             "get_record",
+                            "prepare_action",
                         ],
                     },
                     "params": {"type": "object"},
@@ -128,6 +130,18 @@ RESPONSE_SCHEMA = {
         "confidence": {
             "type": "string",
             "enum": ["high", "medium", "low"],
+        },
+        "action_plan": {
+            "type": "object",
+            "properties": {
+                "action_type": {
+                    "type": "string",
+                    "enum": ["create", "update", "submit"],
+                },
+                "doctype": {"type": "string"},
+                "values": {"type": "object"},
+                "preview": {"type": "string"},
+            },
         },
     },
     "required": ["answer", "sources", "confidence"],

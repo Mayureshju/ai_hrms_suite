@@ -135,11 +135,16 @@ def _can_short_circuit(intent_data: dict[str, Any]) -> bool:
     Short-circuit when:
       1. Greetings / clarifications with a short_answer already provided.
       2. High-confidence questions with no tools needed + a short_answer.
+    Never short-circuit action_request (needs proper confirmation flow).
     """
     confidence = float(intent_data.get("confidence", 0.0))
     intent_type = intent_data.get("intent", "")
     tools = intent_data.get("tools") or []
     short_answer = (intent_data.get("short_answer") or "").strip()
+
+    # Never short-circuit actions — they need the response model for confirmation cards
+    if intent_type == "action_request":
+        return False
 
     # Greetings / clarifications — always cheap
     if intent_type in _SHORT_CIRCUIT_INTENTS and short_answer:
@@ -150,6 +155,46 @@ def _can_short_circuit(intent_data: dict[str, Any]) -> bool:
         return True
 
     return False
+
+
+# ─── Export info extractor ────────────────────────────────────────────────────
+
+def _extract_export_info(
+    intent_data: dict[str, Any],
+    tool_results: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """
+    If list_records was used and returned records, build export_info
+    so the frontend can offer "Download as Excel/CSV".
+
+    Returns: {doctype, filters, fields, record_count} or None
+    """
+    tools = intent_data.get("tools") or []
+    list_tool = None
+    for t in tools:
+        if t.get("tool") == "list_records":
+            list_tool = t
+            break
+
+    if not list_tool:
+        return None
+
+    # Count how many records the tool actually returned
+    record_count = sum(
+        1 for r in tool_results if r.get("type") == "record"
+    )
+    if record_count == 0:
+        return None
+
+    params = list_tool.get("params") or {}
+    return {
+        "doctype": params.get("doctype", ""),
+        "filters": params.get("filters") or {},
+        # fields intentionally empty — export_chat_data will pull ALL visible
+        # fields from DocType meta, not just the subset the LLM queried.
+        "fields": [],
+        "record_count": record_count,
+    }
 
 
 # ─── Main orchestrator ────────────────────────────────────────────────────────
@@ -258,6 +303,9 @@ def ask_hrms(question: str, session_id: Optional[str] = None) -> dict[str, Any]:
         update_modified=True,
     )
 
+    # Build export_info if list_records was used (for Excel/CSV download)
+    export_info = _extract_export_info(intent_data, tool_results)
+
     return {
         "session_id": session_id,
         "answer": answer_data.get("answer", ""),
@@ -269,4 +317,6 @@ def ask_hrms(question: str, session_id: Optional[str] = None) -> dict[str, Any]:
         "short_circuited": short_circuited,
         "tools_used": len(tool_results),
         "latency_ms": int((t1 - t0) * 1000),
+        "action_plan": answer_data.get("action_plan"),
+        "export_info": export_info,
     }

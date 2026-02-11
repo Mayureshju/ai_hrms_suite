@@ -30,6 +30,21 @@ _SKIP_FIELD_TYPES = frozenset(
     }
 )
 
+# HR-essential DocTypes that live in erpnext modules (Setup, etc.)
+# but are core to HRMS operations.
+_EXTRA_HRMS_DOCTYPES = frozenset({
+    "Employee",
+    "Employee Group",
+    "Employee Separation",
+    "Employee Onboarding",
+    "Holiday List",
+    "Department",
+    "Designation",
+    "Branch",
+    "Employment Type",
+    "Company",
+})
+
 
 # ─── Module / Domain Map ─────────────────────────────────────────────────────
 
@@ -49,7 +64,8 @@ def get_hrms_modules() -> list[str]:
 
 
 def get_hrms_domain_map() -> dict[str, list[str]]:
-    """Build module → doctype-list map from HRMS modules (cached 1 h)."""
+    """Build module → doctype-list map from HRMS modules (cached 1 h).
+    Also includes essential HR DocTypes from erpnext under an 'HR Core' group."""
     cached = frappe.cache.get_value(_DOMAIN_MAP_CACHE_KEY)
     if cached:
         return cached
@@ -64,13 +80,18 @@ def get_hrms_domain_map() -> dict[str, list[str]]:
         )
         if doctypes:
             domain_map[module] = doctypes
+    # Add essential HR DocTypes that live outside the hrms app
+    extra_found = [dt for dt in _EXTRA_HRMS_DOCTYPES if frappe.db.exists("DocType", dt)]
+    if extra_found:
+        domain_map["HR Core (ERPNext)"] = sorted(extra_found)
     if domain_map:
         frappe.cache.set_value(_DOMAIN_MAP_CACHE_KEY, domain_map, expires_in_sec=3600)
     return domain_map
 
 
 def get_all_hrms_doctypes() -> set[str]:
-    """Flat set of all non-table doctype names in HRMS modules (cached 1 h)."""
+    """Flat set of all non-table doctype names in HRMS modules (cached 1 h).
+    Also includes essential HR DocTypes from erpnext (Employee, Department, etc.)."""
     cached = frappe.cache.get_value(_HRMS_DOCTYPES_CACHE_KEY)
     if cached:
         return set(cached)
@@ -78,6 +99,8 @@ def get_all_hrms_doctypes() -> set[str]:
     result: set[str] = set()
     for doctypes in domain_map.values():
         result.update(doctypes)
+    # Add HR-essential DocTypes from erpnext
+    result.update(_EXTRA_HRMS_DOCTYPES)
     if result:
         frappe.cache.set_value(
             _HRMS_DOCTYPES_CACHE_KEY, list(result), expires_in_sec=3600

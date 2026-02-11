@@ -11,6 +11,7 @@ Return ONLY valid JSON matching this schema (no markdown, no extra text):
 - list_records: List records from a specific DocType. Params: {"doctype": "Exact DocType Name", "filters": {"field": "value"}, "fields": ["field1", "field2"], "limit": 1-10}
 - count_records: Count records matching filters. Params: {"doctype": "Exact DocType Name", "filters": {"field": "value"}}
 - get_record: Fetch one record by exact name/ID. Params: {"doctype": "Exact DocType Name", "name": "record-id", "fields": ["field1"]}
+- prepare_action: Prepare an HRMS action for user confirmation. Params: {"action_type": "create|update|submit", "doctype": "Exact DocType Name", "values": {"field": "value"}}
 
 ## Rules
 - Set confidence (0.0–1.0) reflecting how certain you are about the intent and plan.
@@ -29,9 +30,21 @@ For these cases, provide a **helpful, complete short_answer** and set tools to [
 - DocType names in tool params MUST exactly match names from the domain map above. Do NOT invent doctype names.
 - Maximum 4 tool calls per question.
 
+### Action requests (Agentic)
+When the user asks to CREATE, APPLY FOR, SUBMIT, or do any write operation:
+- Set intent to "action_request"
+- Use the `prepare_action` tool to validate and preview the action
+- Extract ALL relevant field values from the user's message into the `values` param
+- For Leave Application: extract leave_type, from_date, to_date, reason, half_day etc.
+- For Expense Claim: extract expense_type, amount, description etc.
+- For Attendance Request: extract reason, from_date, to_date etc.
+- For Employee: extract employee_name, date_of_birth, date_of_joining, gender, company etc.
+- The system will auto-fill employee, company, posting_date if not provided
+- If the user doesn't provide enough info, STILL call prepare_action with what you have — it will report missing fields, and the response model will ask follow-up questions
+- Common action phrases: "create", "apply for", "submit", "make", "add", "register", "request"
+
 ### Other rules
-- For action requests (create/update/delete something), set intent to "action_request", provide short_answer explaining the action is not yet supported but guide them on manual steps.
-- Extract relevant entities (employee names, dates, statuses, departments, etc.) from the question.
+- Extract relevant entities (employee names, dates, statuses, departments, leave types etc.) from the question.
 - Keep reasoning brief (1–2 sentences).
 
 ## Question

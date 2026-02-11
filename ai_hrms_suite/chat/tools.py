@@ -2,13 +2,15 @@
 Node 2: Tool Execution — zero LLM cost, pure Frappe API calls.
 
 Each tool is permission-checked and scoped to HRMS modules.
-The registry pattern makes it trivial to add agentic action tools in Phase 2.
+Supports both read-only tools (search, list, count, get) and
+agentic action tools (prepare_action) with a two-step confirmation flow.
 """
 
 import re
 from typing import Any, Callable
 
 import frappe
+from frappe.utils import today, nowdate, get_fullname
 
 from ai_hrms_suite.chat.retriever import (
     get_all_hrms_doctypes,
@@ -49,7 +51,7 @@ def execute_tools(tool_calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return results
 
 
-# ─── Tool implementations ────────────────────────────────────────────────────
+# ─── Read-Only Tool implementations ──────────────────────────────────────────
 
 def _tool_search_meta(params: dict[str, Any]) -> list[dict[str, Any]]:
     """Search DocType metadata within HRMS modules."""
@@ -206,14 +208,193 @@ def _tool_get_record(params: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+# ─── Agentic Action Tool ─────────────────────────────────────────────────────
+
+def _tool_prepare_action(params: dict[str, Any]) -> list[dict[str, Any]]:
+    """
+    Prepare (but don't execute) an HRMS action — create, update, submit.
+
+    Returns validation results and a preview of the action for user confirmation.
+    The actual execution happens via the confirm_action API endpoint.
+    """
+    action_type = str(params.get("action_type", "create")).strip()
+    doctype = str(params.get("doctype", "")).strip()
+    values = params.get("values") or {}
+
+    if not doctype:
+        return [_error_item("prepare_action", "DocType is required.")]
+    if not validate_doctype_in_hrms(doctype):
+        return [_error_item("prepare_action", f"'{doctype}' is not an HRMS DocType.")]
+    if not frappe.db.exists("DocType", doctype):
+        return [_error_item("prepare_action", f"DocType '{doctype}' does not exist.")]
+
+    # Permission check
+    perm_type = "create" if action_type == "create" else "write"
+    if not frappe.has_permission(doctype, perm_type):
+        return [
+            _error_item(
+                "prepare_action",
+                f"You don't have {perm_type} permission for {doctype}.",
+            )
+        ]
+
+    meta = frappe.get_meta(doctype)
+
+    # Auto-fill smart defaults
+    enriched_values = _enrich_defaults(meta, doctype, values)
+
+    # Validate required fields
+    missing_fields = _check_required_fields(meta, enriched_values)
+
+    # Validate field values against meta
+    validation_errors = _validate_field_values(meta, enriched_values)
+
+    # Build preview
+    preview_fields = {}
+    for field_name, val in enriched_values.items():
+        field_meta = meta.get_field(field_name)
+        label = field_meta.label if field_meta else field_name
+        preview_fields[label] = val
+
+    return [
+        {
+            "source_id": f"action:prepare:{doctype}",
+            "type": "action_preview",
+            "action": {
+                "action_type": action_type,
+                "doctype": doctype,
+                "values": enriched_values,
+                "preview": f"Ready to {action_type} {doctype}" if not missing_fields else
+                    f"Missing required fields: {', '.join(missing_fields)}",
+            },
+            "preview_fields": preview_fields,
+            "missing_fields": missing_fields,
+            "validation_errors": validation_errors,
+            "is_valid": len(missing_fields) == 0 and len(validation_errors) == 0,
+        }
+    ]
+
+
+def _enrich_defaults(meta, doctype: str, values: dict[str, Any]) -> dict[str, Any]:
+    """
+    Auto-fill smart defaults based on DocType and current user context.
+    Zero hardcoding — all defaults come from the user's Frappe context.
+    """
+    enriched = dict(values)
+
+    # Auto-detect current user's employee
+    user = frappe.session.user
+    employee = _get_current_employee()
+
+    # Employee-linked fields
+    if employee:
+        if "employee" in _get_field_names(meta) and "employee" not in enriched:
+            enriched["employee"] = employee.get("name", "")
+        if "employee_name" in _get_field_names(meta) and "employee_name" not in enriched:
+            enriched["employee_name"] = employee.get("employee_name", "")
+        if "company" in _get_field_names(meta) and "company" not in enriched:
+            enriched["company"] = employee.get("company", "")
+        if "department" in _get_field_names(meta) and "department" not in enriched:
+            enriched["department"] = employee.get("department", "")
+
+    # Date defaults
+    date_fields_defaults = {
+        "posting_date": today(),
+        "from_date": today(),
+        "transaction_date": today(),
+    }
+    for fname, default_val in date_fields_defaults.items():
+        if fname in _get_field_names(meta) and fname not in enriched:
+            enriched[fname] = default_val
+
+    return enriched
+
+
+def _get_current_employee() -> dict[str, Any] | None:
+    """Look up the Employee record linked to the current session user."""
+    user = frappe.session.user
+    cache_key = f"ai_hrms:employee:{user}"
+    cached = frappe.cache.get_value(cache_key)
+    if cached:
+        return cached
+
+    emp_name = frappe.db.get_value("Employee", {"user_id": user}, "name")
+    if not emp_name:
+        return None
+
+    emp = frappe.db.get_value(
+        "Employee",
+        emp_name,
+        ["name", "employee_name", "company", "department", "designation"],
+        as_dict=True,
+    )
+    if emp:
+        frappe.cache.set_value(cache_key, emp, expires_in_sec=300)
+    return emp
+
+
+def _get_field_names(meta) -> set[str]:
+    """Get all field names from DocType meta."""
+    return {f.fieldname for f in meta.fields if f.fieldname}
+
+
+_AUTO_FILLED_FIELDS = frozenset({
+    "naming_series", "amended_from", "status", "docstatus",
+    "owner", "modified_by", "creation", "modified",
+})
+
+
+def _check_required_fields(meta, values: dict[str, Any]) -> list[str]:
+    """Check which required fields are missing from values.
+    Skips auto-filled fields (naming_series, status with defaults, etc.)."""
+    missing = []
+    for f in meta.fields:
+        if not f.reqd:
+            continue
+        if f.fieldtype in {"Section Break", "Column Break", "Tab Break", "Table"}:
+            continue
+        if f.fieldname in _AUTO_FILLED_FIELDS:
+            continue
+        # Skip fields that have a default value set
+        if f.default:
+            continue
+        if f.fieldname not in values or not values[f.fieldname]:
+            missing.append(f.label or f.fieldname)
+    return missing
+
+
+def _validate_field_values(meta, values: dict[str, Any]) -> list[str]:
+    """Validate field values against meta (types, Link existence, etc.)."""
+    errors = []
+    for field_name, val in values.items():
+        field = meta.get_field(field_name)
+        if not field:
+            continue
+        # Validate Link fields — does the target record exist?
+        if field.fieldtype == "Link" and val:
+            if not frappe.db.exists(field.options, val):
+                errors.append(
+                    f"{field.label or field_name}: '{val}' not found in {field.options}"
+                )
+        # Validate Select fields — is the value in options?
+        if field.fieldtype == "Select" and val and field.options:
+            valid_options = [o.strip() for o in field.options.split("\n") if o.strip()]
+            if val not in valid_options:
+                errors.append(
+                    f"{field.label or field_name}: '{val}' is not a valid option. "
+                    f"Valid: {', '.join(valid_options[:8])}"
+                )
+    return errors
+
+
 # ─── Registry ────────────────────────────────────────────────────────────────
-# Phase 2: add action tools here (create_leave, submit_expense, etc.)
 
 _TOOL_REGISTRY: dict[str, Callable] = {
     "search_meta": _tool_search_meta,
     "list_records": _tool_list_records,
     "count_records": _tool_count_records,
     "get_record": _tool_get_record,
+    "prepare_action": _tool_prepare_action,
 }
 
 
