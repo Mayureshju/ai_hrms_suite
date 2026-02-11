@@ -8,10 +8,11 @@ Open-source AI-first HRMS extensions for ERPNext/Frappe HR: intelligent recruitm
 - **Ask Anything in HRMS**: Natural language queries about employees, leaves, payroll, attendance, recruitment, and more
 - **3-Node Hybrid Architecture**: Cost-optimized pipeline using cheap models for intent analysis, zero-cost tool execution, and smart models for response generation
 - **Agentic Actions**: Create and manage HR records (Leave Applications, Employees, etc.) through conversational interface with 2-step confirmation
+- **Data Export**: Export query results to Excel or CSV with all visible fields — perfect for list-based queries like "show me all employees"
 - **Session Management**: Persistent chat sessions with history, search, rename, and delete capabilities
 - **Smart Short-Circuiting**: Direct answers for simple queries (greetings, clarifications) without invoking expensive models
 - **Permission-Aware**: All queries and actions respect Frappe's role-based access control
-- **Floating Widget + Expandable UI**: Accessible from anywhere in the desk with expandable full-screen chat experience
+- **Floating Widget + Expandable UI**: Accessible from anywhere in the desk with in-place expandable view (no page navigation) featuring session sidebar and full chat history
 
 ### 📄 Recruitment Automation
 - **Resume Parsing**: Extract structured JSON from PDF/DOCX resumes with schema validation
@@ -75,6 +76,13 @@ Streaming Response
 - Node 3 only invoked when needed (complex queries, agentic actions)
 - Short-circuiting for greetings/clarifications saves ~70% of costs
 - Intelligent caching prevents duplicate processing
+
+**Export Functionality:**
+- When `list_records` tool is used, `export_info` metadata is automatically attached to the response
+- Frontend displays "Download Excel" and "Download CSV" buttons when exportable data is present
+- Export API pulls **all visible, non-hidden fields** from DocType meta (not just the subset queried by LLM)
+- Exports respect Frappe permissions and are limited to 500 rows per request
+- Supports both programmatic API calls and UI-triggered downloads
 
 ## 📦 Installation
 
@@ -154,21 +162,30 @@ Task: response_gen
 1. **Access the Chatbot**:
    - Look for the floating **AI HRMS Assistant** widget in the bottom-right corner
    - Click to open the chat interface
-   - Click the expand icon (four corners) to open full-screen chat with session management
+   - Click the expand icon (four corners) to expand the widget in-place with session sidebar (no page navigation)
 
 2. **Ask Questions**:
    - Type natural language questions: "How do I apply for leave?", "Show me pending leave applications", "What is payroll processing?"
+   - For list queries: "Show me all employees", "List employees with designation Software Developer"
    - The chatbot understands HRMS context and provides accurate answers
 
-3. **Agentic Actions**:
+3. **Export Data**:
+   - When the chatbot returns list-based results (e.g., employees, leave applications), **Download Excel** and **Download CSV** buttons appear automatically
+   - Click to export all visible fields of the queried DocType (not just the fields shown in chat)
+   - Exports include all non-hidden, non-attachment fields with proper labels
+   - Alternatively, ask: "download excel" or "export csv" as a follow-up to a list query
+
+4. **Agentic Actions**:
    - Request actions: "Create a leave application", "Add a new employee"
-   - Review the action preview card
+   - Review the action preview card with auto-filled defaults and validation
    - Click **Confirm** to execute (requires appropriate permissions)
 
-4. **Session Management**:
+5. **Session Management** (Expanded View):
    - Click **+ New chat** to start a fresh conversation
    - Use the sidebar to switch between sessions
-   - Search, rename, or delete sessions as needed
+   - Search sessions by title
+   - Delete sessions with the trash icon
+   - Sessions are automatically saved and persist across browser sessions
 
 ### Recruitment Automation
 
@@ -211,6 +228,7 @@ All endpoints require authentication (Frappe session).
 - `ai_hrms_suite.api.chatbot.delete_session(session_id)`: Delete a session
 - `ai_hrms_suite.api.chatbot.get_messages(session_id, limit=50)`: Get session messages
 - `ai_hrms_suite.api.chatbot.confirm_action(session_id, message_id)`: Execute a pending action
+- `ai_hrms_suite.api.chatbot.export_chat_data(doctype, filters, fields, file_type="Excel")`: Export HRMS data to Excel or CSV (returns downloadable file)
 
 ### Recruitment APIs
 
@@ -250,7 +268,9 @@ All endpoints require authentication (Frappe session).
 - Natural language interface for HRMS operations
 - Persistent sessions with full history
 - Agentic actions reduce manual data entry
-- Expandable UI accessible from anywhere
+- One-click data export (Excel/CSV) for list queries
+- Expandable UI accessible from anywhere (no page navigation)
+- In-place expansion with session sidebar for seamless workflow
 
 ### Operational Speed
 - Automated shortlisting reduces manual screening time
@@ -267,7 +287,9 @@ All endpoints require authentication (Frappe session).
 - [ ] Integration with external HR tools
 - [ ] Custom workflow automation via chatbot
 - [ ] Batch processing for bulk resume parsing
-- [ ] Enhanced action preview with field-level validation
+- [ ] PDF export support for list views (currently Excel/CSV only)
+- [ ] Export templates with custom field selection
+- [ ] Scheduled exports and email delivery
 
 ## 📝 Notes
 
@@ -277,6 +299,8 @@ All endpoints require authentication (Frappe session).
 - **Redis Cache**: Recommended for optimal performance (settings cache, HRMS module lists)
 - **Permissions**: All chatbot queries and actions respect Frappe role-based permissions
 - **Session Ownership**: Users can only access their own chat sessions
+- **Data Export**: Export functionality automatically includes all visible, non-hidden fields from the DocType (not just the fields queried by the LLM). Exports respect read permissions and are limited to 500 rows per export.
+- **UI/UX**: The chatbot widget expands in-place (no route change) for better user experience. Session management is integrated into the expanded view.
 
 ## 🤝 Contributing
 
