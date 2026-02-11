@@ -1,19 +1,19 @@
 import time
 import requests
-import frappe
 from ai_hrms_suite.ai.providers.base import LLMProvider, LLMResult
+from ai_hrms_suite.utils.config import get_provider_config
 
 
 class GeminiProvider(LLMProvider):
     name = "gemini"
 
     def complete_json(self, prompt: str, json_schema, model: str, timeout_s: int = 60) -> LLMResult:
-        api_key = frappe.conf.get("gemini_api_key") or frappe.get_site_config().get("gemini_api_key")
+        cfg = get_provider_config("gemini")
+        api_key = cfg.get("api_key")
         if not api_key:
-            raise ValueError("Missing gemini_api_key in site_config.json")
+            raise ValueError("Missing Gemini API key in AI HRMS Settings")
 
-        base_url = frappe.conf.get("gemini_base_url") or "https://generativelanguage.googleapis.com"
-        # Google endpoint format: /v1beta/models/{model}:generateContent?key=...
+        base_url = cfg.get("base_url") or "https://generativelanguage.googleapis.com"
         url = f"{base_url}/v1beta/models/{model}:generateContent?key={api_key}"
 
         payload = {
@@ -33,7 +33,6 @@ class GeminiProvider(LLMProvider):
             raise RuntimeError(f"Gemini error {r.status_code}: {r.text[:800]}")
 
         data = r.json()
-        # Gemini response: candidates[0].content.parts[0].text
         content = ""
         candidates = data.get("candidates") or []
         if candidates:
@@ -41,7 +40,6 @@ class GeminiProvider(LLMProvider):
             if parts and "text" in parts[0]:
                 content = parts[0]["text"]
 
-        # Token usage location can vary; keep 0 if not present
         usage = data.get("usageMetadata") or {}
         return LLMResult(
             text=content,

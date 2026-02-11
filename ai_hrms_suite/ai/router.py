@@ -10,7 +10,7 @@ from ai_hrms_suite.utils.hashing import sha256_text
 class AIRouter:
     """
     Cost-optimized multi-provider router:
-    - Uses policy tiers from site_config (provider+model list per task)
+    - Uses policy tiers from AI HRMS Settings DocType (provider+model per task)
     - Validates JSON + schema
     - Falls back to next tier on JSON/schema failure
     - Optional cache using input_hash -> output_json

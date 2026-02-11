@@ -1,18 +1,19 @@
 import time
 import requests
-import frappe
 from ai_hrms_suite.ai.providers.base import LLMProvider, LLMResult
+from ai_hrms_suite.utils.config import get_provider_config
 
 
 class OpenAIProvider(LLMProvider):
     name = "openai"
 
     def complete_json(self, prompt: str, json_schema, model: str, timeout_s: int = 60) -> LLMResult:
-        api_key = frappe.conf.get("openai_api_key") or frappe.get_site_config().get("openai_api_key")
+        cfg = get_provider_config("openai")
+        api_key = cfg.get("api_key")
         if not api_key:
-            raise ValueError("Missing openai_api_key in site_config.json")
+            raise ValueError("Missing OpenAI API key in AI HRMS Settings")
 
-        base_url = frappe.conf.get("openai_base_url") or "https://api.openai.com/v1"
+        base_url = cfg.get("base_url") or "https://api.openai.com/v1"
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
@@ -38,7 +39,6 @@ class OpenAIProvider(LLMProvider):
         content = data["choices"][0]["message"]["content"]
         usage = data.get("usage") or {}
 
-        # OpenAI response doesn't include cost. Cost is computed elsewhere or left 0.
         return LLMResult(
             text=content,
             model=model,

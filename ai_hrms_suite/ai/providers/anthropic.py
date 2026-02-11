@@ -1,27 +1,28 @@
 import time
 import requests
-import frappe
 from ai_hrms_suite.ai.providers.base import LLMProvider, LLMResult
+from ai_hrms_suite.utils.config import get_provider_config
 
 
 class AnthropicProvider(LLMProvider):
     name = "anthropic"
 
     def complete_json(self, prompt: str, json_schema, model: str, timeout_s: int = 60) -> LLMResult:
-        api_key = frappe.conf.get("anthropic_api_key") or frappe.get_site_config().get("anthropic_api_key")
+        cfg = get_provider_config("anthropic")
+        api_key = cfg.get("api_key")
         if not api_key:
-            raise ValueError("Missing anthropic_api_key in site_config.json")
+            raise ValueError("Missing Anthropic API key in AI HRMS Settings")
 
-        base_url = frappe.conf.get("anthropic_base_url") or "https://api.anthropic.com"
+        base_url = cfg.get("base_url") or "https://api.anthropic.com"
         headers = {
             "x-api-key": api_key,
-            "anthropic-version": frappe.conf.get("anthropic_version") or "2023-06-01",
+            "anthropic-version": cfg.get("version") or "2023-06-01",
             "content-type": "application/json"
         }
 
         payload = {
             "model": model,
-            "max_tokens": int(frappe.conf.get("ai_hrms_anthropic_max_tokens") or 1200),
+            "max_tokens": int(cfg.get("max_tokens") or 1200),
             "temperature": 0.2,
             "messages": [
                 {"role": "user", "content": prompt}
@@ -44,11 +45,9 @@ class AnthropicProvider(LLMProvider):
         if blocks and isinstance(blocks, list) and "text" in blocks[0]:
             content = blocks[0]["text"]
         else:
-            # fallback
             content = str(blocks)
 
         usage = data.get("usage") or {}
-        # No cost returned -> 0
         return LLMResult(
             text=content,
             model=model,
