@@ -124,6 +124,13 @@ def _tool_list_records(params: dict[str, Any]) -> list[dict[str, Any]]:
     fields = sanitize_fields(meta, params.get("fields") or [])
     limit = min(max(int(params.get("limit", 5)), 1), 10)
 
+    # Auto-scope employee-linked DocTypes to current user's employee
+    # when no employee/employee_name filter is provided ("my leave balance").
+    filters = _auto_scope_employee(meta, doctype, filters)
+
+    # Auto-include key display fields so results are human-readable
+    fields = _ensure_display_fields(meta, doctype, fields)
+
     rows = frappe.get_list(
         doctype,
         filters=filters,
@@ -143,6 +150,67 @@ def _tool_list_records(params: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
     return results
+
+
+# Fields that should always be included when listing certain DocTypes
+# so that results are human-readable (names, not just IDs).
+_DISPLAY_FIELDS: dict[str, list[str]] = {
+    "Employee": ["employee_name", "company", "department", "designation", "status"],
+    "Leave Application": ["employee_name", "leave_type", "from_date", "to_date", "status"],
+    "Leave Allocation": ["employee_name", "leave_type", "new_leaves_allocated", "total_leaves_allocated"],
+    "Leave Ledger Entry": ["employee_name", "leave_type", "leaves", "from_date", "to_date"],
+    "Attendance": ["employee_name", "attendance_date", "status"],
+    "Expense Claim": ["employee_name", "total_claimed_amount", "status"],
+    "Salary Slip": ["employee_name", "posting_date", "gross_pay", "net_pay"],
+    "Job Applicant": ["applicant_name", "job_title", "status"],
+    "Job Opening": ["job_title", "department", "status"],
+}
+
+
+def _ensure_display_fields(meta, doctype: str, fields: list[str]) -> list[str]:
+    """Ensure key display fields are present for known DocTypes."""
+    extras = _DISPLAY_FIELDS.get(doctype, [])
+    if not extras:
+        return fields
+
+    existing = set(fields)
+    for f in extras:
+        if f not in existing and meta.get_field(f):
+            fields.append(f)
+    # Keep within the 12-field limit but prioritize display fields
+    return fields[:12]
+
+
+# DocTypes where "employee" filter should auto-scope to current user if empty
+_EMPLOYEE_SCOPED_DOCTYPES = frozenset({
+    "Leave Allocation", "Leave Application", "Leave Ledger Entry",
+    "Attendance", "Attendance Request", "Expense Claim",
+    "Salary Slip", "Compensatory Leave Request",
+})
+
+
+def _auto_scope_employee(
+    meta, doctype: str, filters: dict[str, Any]
+) -> dict[str, Any]:
+    """
+    For employee-linked DocTypes (Leave Allocation, Salary Slip, etc.),
+    if no employee or employee_name filter is given, auto-scope to
+    the current user's employee.
+    This handles "show my leave balance" queries.
+    """
+    if doctype not in _EMPLOYEE_SCOPED_DOCTYPES:
+        return filters
+
+    # Already has an employee filter — don't override
+    if "employee" in filters or "employee_name" in filters:
+        return filters
+
+    employee = _get_current_employee()
+    if employee and employee.get("name") and meta.get_field("employee"):
+        filters = dict(filters)
+        filters["employee"] = employee["name"]
+
+    return filters
 
 
 def _tool_count_records(params: dict[str, Any]) -> list[dict[str, Any]]:
@@ -172,15 +240,22 @@ def _tool_count_records(params: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _tool_get_record(params: dict[str, Any]) -> list[dict[str, Any]]:
-    """Get a single record by name."""
+    """Get a single record by name or employee_name lookup."""
     doctype = str(params.get("doctype", "")).strip()
     name = str(params.get("name", "")).strip()
     if not doctype or not name:
         return []
     if not validate_doctype_in_hrms(doctype):
         return [_error_item(f"get:{doctype}", f"'{doctype}' not in HRMS modules.")]
+
+    # If the name doesn't exist, try fuzzy employee lookup by employee_name
     if not frappe.db.exists(doctype, name):
-        return [_error_item(f"get:{doctype}:{name}", f"{doctype}/{name} not found.")]
+        resolved = _resolve_by_name(doctype, name)
+        if resolved:
+            name = resolved
+        else:
+            return [_error_item(f"get:{doctype}:{name}", f"{doctype}/{name} not found.")]
+
     if not frappe.has_permission(doctype, "read", doc=name):
         return [
             _error_item(
@@ -191,6 +266,7 @@ def _tool_get_record(params: dict[str, Any]) -> list[dict[str, Any]]:
 
     meta = frappe.get_meta(doctype)
     fields = sanitize_fields(meta, params.get("fields") or [])
+    fields = _ensure_display_fields(meta, doctype, fields)
     doc = frappe.get_doc(doctype, name)
     data: dict[str, Any] = {}
     for f in fields:
@@ -206,6 +282,30 @@ def _tool_get_record(params: dict[str, Any]) -> list[dict[str, Any]]:
             "data": data,
         }
     ]
+
+
+def _resolve_by_name(doctype: str, query: str) -> str | None:
+    """Try to resolve a human name to an actual document name/ID.
+    Works for Employee (employee_name), Job Applicant (applicant_name), etc."""
+    name_fields = {
+        "Employee": "employee_name",
+        "Job Applicant": "applicant_name",
+        "Job Opening": "job_title",
+    }
+    name_field = name_fields.get(doctype)
+    if not name_field:
+        return None
+
+    # Try exact match first
+    result = frappe.db.get_value(doctype, {name_field: query}, "name")
+    if result:
+        return result
+
+    # Try case-insensitive like match
+    result = frappe.db.get_value(
+        doctype, {name_field: ["like", f"%{query}%"]}, "name"
+    )
+    return result
 
 
 # ─── Agentic Action Tool ─────────────────────────────────────────────────────

@@ -31,18 +31,41 @@ _SKIP_FIELD_TYPES = frozenset(
 )
 
 # HR-essential DocTypes that live in erpnext modules (Setup, etc.)
-# but are core to HRMS operations.
+# but are core to HRMS operations — always included in the HRMS scope.
 _EXTRA_HRMS_DOCTYPES = frozenset({
+    # Core employee
     "Employee",
     "Employee Group",
     "Employee Separation",
     "Employee Onboarding",
+    # Org structure
     "Holiday List",
     "Department",
     "Designation",
     "Branch",
     "Employment Type",
     "Company",
+    # Leave management (critical for leave balance queries)
+    "Leave Allocation",
+    "Leave Application",
+    "Leave Type",
+    "Leave Ledger Entry",
+    "Leave Encashment",
+    "Leave Policy",
+    "Leave Policy Assignment",
+    "Leave Period",
+    "Compensatory Leave Request",
+    # Attendance
+    "Attendance",
+    "Attendance Request",
+    # Payroll
+    "Salary Slip",
+    "Salary Structure",
+    "Salary Structure Assignment",
+    "Payroll Entry",
+    # Expense
+    "Expense Claim",
+    "Expense Claim Type",
 })
 
 
@@ -153,6 +176,11 @@ _SAFE_FILTER_TYPES = frozenset(
     {"Link", "Select", "Data", "Int", "Float", "Date", "Datetime"}
 )
 
+# Operators we allow in ["operator", "value"] style filters
+_SAFE_FILTER_OPS = frozenset(
+    {"=", "!=", ">", "<", ">=", "<=", "like", "not like", "in", "not in", "is"}
+)
+
 
 def allowed_filter_field(meta, fieldname: str) -> bool:
     """Return True if fieldname is safe to use in filters."""
@@ -165,15 +193,26 @@ def allowed_filter_field(meta, fieldname: str) -> bool:
 
 
 def sanitize_filters(meta, filters: dict[str, Any]) -> dict[str, Any]:
-    """Strip filters to only allowed field names & scalar values."""
+    """Strip filters to only allowed field names & scalar values.
+
+    Supports both simple scalar filters {"field": "value"}
+    and operator filters {"field": ["like", "%value%"]}.
+    """
     out: dict[str, Any] = {}
     for key, value in (filters or {}).items():
         if not isinstance(key, str):
             continue
         if not allowed_filter_field(meta, key):
             continue
+        # Simple scalar value
         if isinstance(value, (str, int, float)):
             out[key] = value
+        # Operator-style filter: ["like", "%name%"]
+        elif isinstance(value, list) and len(value) == 2:
+            op = str(value[0]).lower().strip()
+            operand = value[1]
+            if op in _SAFE_FILTER_OPS and isinstance(operand, (str, int, float)):
+                out[key] = [op, operand]
     return out
 
 
