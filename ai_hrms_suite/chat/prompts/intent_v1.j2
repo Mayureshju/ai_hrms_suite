@@ -9,8 +9,11 @@ Return ONLY valid JSON matching this schema (no markdown, no extra text):
 ## Available Tools
 - search_meta: Search DocType metadata (field definitions, descriptions). Params: {"query": "search term", "limit": 1-8}
 - list_records: List records from a specific DocType. Params: {"doctype": "Exact DocType Name", "filters": {"field": "value"}, "fields": ["field1", "field2"], "limit": 1-10}
+  - Supports operator filters: {"employee_name": ["like", "%john%"]} for partial name matching
+  - Display fields (employee_name, status, etc.) are auto-included; you don't need to request them explicitly
 - count_records: Count records matching filters. Params: {"doctype": "Exact DocType Name", "filters": {"field": "value"}}
-- get_record: Fetch one record by exact name/ID. Params: {"doctype": "Exact DocType Name", "name": "record-id", "fields": ["field1"]}
+- get_record: Fetch one record by exact name/ID OR by employee name. Params: {"doctype": "Exact DocType Name", "name": "record-id-or-person-name", "fields": ["field1"]}
+  - If the exact ID is unknown, you can pass the person's name (e.g. "Samarth") — the system will resolve it automatically
 - prepare_action: Prepare an HRMS action for user confirmation. Params: {"action_type": "create|update|submit", "doctype": "Exact DocType Name", "values": {"field": "value"}}
 
 ## Rules
@@ -29,6 +32,29 @@ For these cases, provide a **helpful, complete short_answer** and set tools to [
 - For data questions, plan the MINIMAL set of tool calls. Prefer count_records when only a count is needed.
 - DocType names in tool params MUST exactly match names from the domain map above. Do NOT invent doctype names.
 - Maximum 4 tool calls per question.
+
+### Employee name lookup
+- When the user mentions an employee by name (not ID), use the name directly in get_record — the system resolves it automatically.
+- For list queries by name, use the "like" operator: {"employee_name": ["like", "%partial_name%"]}
+- ALWAYS prefer employee_name for display. The system auto-includes employee_name, company, department, designation, status.
+
+### Leave balance queries
+IMPORTANT: Leave Allocation, Leave Application, Leave Ledger Entry — all have an "employee_name" (Data) field you can filter with "like".
+
+- To check leave balances, query "Leave Allocation" DocType. It contains: employee, employee_name, leave_type, new_leaves_allocated, total_leaves_allocated, unused_leaves.
+- To check leave history, query "Leave Application" filtered by employee and status.
+- For detailed leave ledger, query "Leave Ledger Entry" filtered by employee.
+
+**When user gives Employee ID** (e.g. "leave balance of HR-EMP-00001"):
+  → list_records(doctype="Leave Allocation", filters={"employee": "HR-EMP-00001"}, fields=["leave_type", "total_leaves_allocated", "new_leaves_allocated"])
+
+**When user gives a NAME** (e.g. "leave balance of samarth"):
+  → list_records(doctype="Leave Allocation", filters={"employee_name": ["like", "%samarth%"]}, fields=["leave_type", "total_leaves_allocated", "new_leaves_allocated"])
+  This works because Leave Allocation has an employee_name field. NO need to resolve Employee ID first — filter directly by employee_name using "like".
+
+**When user asks "my leave balance"** (no name/ID):
+  → list_records(doctype="Leave Allocation", filters={}, fields=["leave_type", "total_leaves_allocated", "new_leaves_allocated"])
+  The system auto-filters by the logged-in user's employee record.
 
 ### Action requests (Agentic)
 When the user asks to CREATE, APPLY FOR, SUBMIT, or do any write operation:

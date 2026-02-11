@@ -58,6 +58,8 @@ INTENT_SCHEMA = {
                             "department",
                             "designation",
                             "leave_type",
+                            "company",
+                            "gender",
                             "other",
                         ],
                     },
