@@ -9,6 +9,7 @@ import json
 import frappe
 
 from ai_hrms_suite.chat.service import ask_hrms
+from ai_hrms_suite.chat.retriever import validate_doctype_in_hrms
 
 
 # ─── Session Management ──────────────────────────────────────────────────────
@@ -74,7 +75,7 @@ def ask(question: str, session_id: str | None = None):
         {
             session_id, answer, sources, suggested_questions,
             confidence, intent, domain, short_circuited,
-            tools_used, latency_ms, action_plan
+            tools_used, latency_ms, action_plan, export_info
         }
     """
     return ask_hrms(question=question, session_id=session_id)
@@ -205,9 +206,107 @@ def _save_action_result(session_id: str, action: str, doctype: str, name: str):
     msg = frappe.new_doc("AI Chat Message")
     msg.session = session_id
     msg.role = "assistant"
-    msg.content = f"✅ Action completed: {action} {doctype} → {name}"
+    msg.content = f"\u2705 Action completed: {action} {doctype} \u2192 {name}"
     msg.status = "Success"
     msg.save(ignore_permissions=True)
+
+
+# ─── Export: Excel / CSV Download ────────────────────────────────────────────
+
+
+@frappe.whitelist()
+def export_chat_data(
+    doctype: str,
+    filters: str = "{}",
+    fields: str = "[]",
+    file_type: str = "Excel",
+):
+    """
+    Export HRMS data queried by the chatbot as Excel or CSV.
+
+    Called from the chatbot UI when user clicks "Download as Excel/CSV".
+    Uses the same doctype + filters that the chatbot used to answer the query.
+    """
+    from frappe.utils.xlsxutils import make_xlsx
+
+    doctype = (doctype or "").strip()
+    if not doctype:
+        frappe.throw("DocType is required.")
+    if not validate_doctype_in_hrms(doctype):
+        frappe.throw(f"'{doctype}' is not an HRMS DocType.")
+    if not frappe.has_permission(doctype, "read"):
+        frappe.throw(f"No read permission for {doctype}.")
+
+    # Parse JSON args
+    try:
+        parsed_filters = json.loads(filters) if isinstance(filters, str) else filters
+    except (json.JSONDecodeError, TypeError):
+        parsed_filters = {}
+
+    try:
+        parsed_fields = json.loads(fields) if isinstance(fields, str) else fields
+    except (json.JSONDecodeError, TypeError):
+        parsed_fields = []
+
+    # Ensure we have fields — pull from DocType meta if not provided
+    meta = frappe.get_meta(doctype)
+    if not parsed_fields or not isinstance(parsed_fields, list):
+        parsed_fields = ["name"] + [
+            f.fieldname
+            for f in meta.fields
+            if f.fieldtype not in (
+                "Section Break", "Column Break", "Tab Break",
+                "Table", "HTML", "Button", "Fold",
+            )
+            and f.fieldname
+        ][:15]
+
+    if "name" not in parsed_fields:
+        parsed_fields.insert(0, "name")
+
+    # Sanitize field names against meta
+    valid_fieldnames = {f.fieldname for f in meta.fields}
+    valid_fieldnames.add("name")
+    parsed_fields = [f for f in parsed_fields if f in valid_fieldnames]
+
+    if not parsed_fields:
+        parsed_fields = ["name"]
+
+    # Query data (max 500 rows)
+    rows = frappe.get_list(
+        doctype,
+        filters=parsed_filters,
+        fields=parsed_fields,
+        limit_page_length=500,
+        ignore_permissions=False,
+    )
+
+    # Build label headers
+    field_labels = []
+    for fname in parsed_fields:
+        if fname == "name":
+            field_labels.append("ID")
+        else:
+            field_meta = meta.get_field(fname)
+            field_labels.append(field_meta.label if field_meta else fname)
+
+    # Build data matrix
+    data = [field_labels]
+    for row in rows:
+        data.append([row.get(f, "") for f in parsed_fields])
+
+    file_type = (file_type or "Excel").strip()
+    title = f"{doctype} Export"
+
+    if file_type == "CSV":
+        from frappe.utils.csvutils import build_csv_response
+
+        build_csv_response(data, title)
+    else:
+        xlsx_file = make_xlsx(data, title)
+        frappe.response["filename"] = f"{title}.xlsx"
+        frappe.response["filecontent"] = xlsx_file.getvalue()
+        frappe.response["type"] = "binary"
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────

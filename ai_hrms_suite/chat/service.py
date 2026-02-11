@@ -157,6 +157,44 @@ def _can_short_circuit(intent_data: dict[str, Any]) -> bool:
     return False
 
 
+# ─── Export info extractor ────────────────────────────────────────────────────
+
+def _extract_export_info(
+    intent_data: dict[str, Any],
+    tool_results: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """
+    If list_records was used and returned records, build export_info
+    so the frontend can offer "Download as Excel/CSV".
+
+    Returns: {doctype, filters, fields, record_count} or None
+    """
+    tools = intent_data.get("tools") or []
+    list_tool = None
+    for t in tools:
+        if t.get("tool") == "list_records":
+            list_tool = t
+            break
+
+    if not list_tool:
+        return None
+
+    # Count how many records the tool actually returned
+    record_count = sum(
+        1 for r in tool_results if r.get("type") == "record"
+    )
+    if record_count == 0:
+        return None
+
+    params = list_tool.get("params") or {}
+    return {
+        "doctype": params.get("doctype", ""),
+        "filters": params.get("filters") or {},
+        "fields": params.get("fields") or [],
+        "record_count": record_count,
+    }
+
+
 # ─── Main orchestrator ────────────────────────────────────────────────────────
 
 def ask_hrms(question: str, session_id: Optional[str] = None) -> dict[str, Any]:
@@ -263,6 +301,9 @@ def ask_hrms(question: str, session_id: Optional[str] = None) -> dict[str, Any]:
         update_modified=True,
     )
 
+    # Build export_info if list_records was used (for Excel/CSV download)
+    export_info = _extract_export_info(intent_data, tool_results)
+
     return {
         "session_id": session_id,
         "answer": answer_data.get("answer", ""),
@@ -275,4 +316,5 @@ def ask_hrms(question: str, session_id: Optional[str] = None) -> dict[str, Any]:
         "tools_used": len(tool_results),
         "latency_ms": int((t1 - t0) * 1000),
         "action_plan": answer_data.get("action_plan"),
+        "export_info": export_info,
     }
