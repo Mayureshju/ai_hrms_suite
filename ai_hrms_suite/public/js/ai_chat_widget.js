@@ -26,9 +26,20 @@
   let sessionId = null;
   let panelOpen = false;
   let sending = false;
+  let expanded = false;
+  let sessions = [];
+  let sessionsLoaded = false;
 
   // ─── DOM refs ───────────────────────────────────────────────────────────────
-  let $btn, $panel, $messages, $input, $sendBtn, $typingIndicator;
+  let $btn,
+    $panel,
+    $messages,
+    $input,
+    $sendBtn,
+    $typingIndicator,
+    $sessionList,
+    $sessionSearch,
+    $expandBtn;
 
   // ─── Init ───────────────────────────────────────────────────────────────────
   function init() {
@@ -57,14 +68,33 @@
         <span class="ai-chat-header-title">AI HRMS Assistant</span>
         <span class="ai-chat-header-badge">AI</span>
         <div class="ai-chat-header-actions">
+          <button class="ai-chat-expand-btn" title="Expand">
+            <svg viewBox="0 0 24 24" width="16" height="16"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" fill="currentColor"/></svg>
+          </button>
           <button class="ai-chat-new-btn" title="New conversation">${ICON_NEW}</button>
           <button class="ai-chat-close-btn" title="Close">${ICON_CLOSE}</button>
         </div>
       </div>
-      <div class="ai-chat-messages"></div>
-      <div class="ai-chat-input-area">
-        <textarea class="ai-chat-input" placeholder="Ask anything about HRMS…" rows="1"></textarea>
-        <button class="ai-chat-send-btn" disabled>${ICON_SEND}</button>
+      <div class="ai-chat-body">
+        <div class="ai-chat-sidebar">
+          <div class="ai-chat-sidebar-header">
+            <span class="ai-chat-sidebar-title">Your chats</span>
+          </div>
+          <div class="ai-chat-sidebar-actions">
+            <button class="ai-chat-sidebar-new">New chat</button>
+          </div>
+          <div class="ai-chat-sidebar-search">
+            <input class="ai-chat-sidebar-search-input" placeholder="Search chats..." />
+          </div>
+          <div class="ai-chat-session-list"></div>
+        </div>
+        <div class="ai-chat-main">
+          <div class="ai-chat-messages"></div>
+          <div class="ai-chat-input-area">
+            <textarea class="ai-chat-input" placeholder="Ask anything about HRMS…" rows="1"></textarea>
+            <button class="ai-chat-send-btn" disabled>${ICON_SEND}</button>
+          </div>
+        </div>
       </div>
     `;
     document.body.appendChild($panel);
@@ -72,6 +102,9 @@
     $messages = $panel.querySelector(".ai-chat-messages");
     $input = $panel.querySelector(".ai-chat-input");
     $sendBtn = $panel.querySelector(".ai-chat-send-btn");
+    $sessionList = $panel.querySelector(".ai-chat-session-list");
+    $sessionSearch = $panel.querySelector(".ai-chat-sidebar-search-input");
+    $expandBtn = $panel.querySelector(".ai-chat-expand-btn");
   }
 
   // ─── Events ─────────────────────────────────────────────────────────────────
@@ -79,7 +112,19 @@
     $btn.addEventListener("click", togglePanel);
 
     $panel.querySelector(".ai-chat-close-btn").addEventListener("click", closePanel);
+    $expandBtn.addEventListener("click", toggleExpand);
     $panel.querySelector(".ai-chat-new-btn").addEventListener("click", newSession);
+    $panel
+      .querySelector(".ai-chat-sidebar-new")
+      .addEventListener("click", function () {
+        newSession();
+        if (!expanded) {
+          toggleExpand();
+        } else {
+          // refresh sessions so the new one appears after user sends a message
+          loadSessions();
+        }
+      });
 
     $sendBtn.addEventListener("click", sendMessage);
 
@@ -96,6 +141,12 @@
       this.style.height = Math.min(this.scrollHeight, 80) + "px";
       $sendBtn.disabled = !this.value.trim() || sending;
     });
+
+    if ($sessionSearch) {
+      $sessionSearch.addEventListener("input", function () {
+        filterSessions(this.value || "");
+      });
+    }
   }
 
   // ─── Panel toggle ──────────────────────────────────────────────────────────
@@ -125,6 +176,19 @@
   function closePanel() {
     $panel.classList.add("hidden");
     panelOpen = false;
+  }
+
+  // ─── Expand / collapse ───────────────────────────────────────────────────────
+  function toggleExpand() {
+    expanded = !expanded;
+    if (expanded) {
+      $panel.classList.add("expanded");
+      if (!sessionsLoaded) {
+        loadSessions();
+      }
+    } else {
+      $panel.classList.remove("expanded");
+    }
   }
 
   // ─── Welcome ────────────────────────────────────────────────────────────────
@@ -161,6 +225,16 @@
     $input.value = "";
     $input.style.height = "auto";
     $sendBtn.disabled = true;
+
+    // When sidebar is open, visually select "no session"
+    if (expanded && $sessionList) {
+      Array.prototype.forEach.call(
+        $sessionList.querySelectorAll(".ai-chat-session-item"),
+        function (el) {
+          el.classList.remove("active");
+        }
+      );
+    }
   }
 
   // ─── Load history ───────────────────────────────────────────────────────────
@@ -198,6 +272,124 @@
         localStorage.removeItem(STORAGE_KEY);
       },
     });
+  }
+
+  // ─── Sessions sidebar ────────────────────────────────────────────────────────
+  function loadSessions() {
+    if (!$sessionList) return;
+
+    frappe.call({
+      method: "ai_hrms_suite.api.chatbot.list_sessions",
+      args: { limit: 50 },
+      async: true,
+      callback: function (r) {
+        sessionsLoaded = true;
+        sessions = (r && r.message && r.message.sessions) || [];
+        renderSessionList();
+      },
+    });
+  }
+
+  function renderSessionList() {
+    if (!$sessionList) return;
+    $sessionList.innerHTML = "";
+
+    if (!sessions || !sessions.length) {
+      const empty = document.createElement("div");
+      empty.className = "ai-chat-session-empty";
+      empty.textContent = "No chats yet";
+      $sessionList.appendChild(empty);
+      return;
+    }
+
+    sessions.forEach(function (s) {
+      const item = document.createElement("div");
+      item.className = "ai-chat-session-item";
+      if (s.name === sessionId) {
+        item.classList.add("active");
+      }
+      const title = s.title || "New Chat";
+      const created = s.last_message_on || s.creation;
+
+      item.innerHTML = `
+        <div class="ai-chat-session-main">
+          <div class="ai-chat-session-title">${frappe.utils.escape_html(
+            title
+          )}</div>
+          <div class="ai-chat-session-time">${frappe.datetime.prettyDate(
+            created
+          )}</div>
+        </div>
+        <button class="ai-chat-session-delete" title="Delete">
+          <svg viewBox="0 0 24 24" width="14" height="14">
+            <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" fill="currentColor"/>
+          </svg>
+        </button>
+      `;
+
+      // Open session
+      item
+        .querySelector(".ai-chat-session-main")
+        .addEventListener("click", function () {
+          sessionId = s.name;
+          localStorage.setItem(STORAGE_KEY, sessionId);
+          // highlight
+          Array.prototype.forEach.call(
+            $sessionList.querySelectorAll(".ai-chat-session-item"),
+            function (el) {
+              el.classList.toggle("active", el === item);
+            }
+          );
+          $messages.innerHTML = "";
+          loadHistory();
+        });
+
+      // Delete session
+      item
+        .querySelector(".ai-chat-session-delete")
+        .addEventListener("click", function (e) {
+          e.stopPropagation();
+          frappe.confirm(
+            "Delete this chat and all its messages?",
+            function () {
+              frappe.call({
+                method: "ai_hrms_suite.api.chatbot.delete_session",
+                args: { session_id: s.name },
+                async: true,
+                callback: function () {
+                  // Remove from local list and re-render
+                  sessions = sessions.filter(function (x) {
+                    return x.name !== s.name;
+                  });
+                  if (sessionId === s.name) {
+                    newSession();
+                  }
+                  renderSessionList();
+                  frappe.show_alert({
+                    message: "Chat deleted",
+                    indicator: "green",
+                  });
+                },
+              });
+            }
+          );
+        });
+
+      $sessionList.appendChild(item);
+    });
+  }
+
+  function filterSessions(query) {
+    if (!$sessionList) return;
+    const q = (query || "").toLowerCase();
+    Array.prototype.forEach.call(
+      $sessionList.querySelectorAll(".ai-chat-session-item"),
+      function (el) {
+        const titleEl = el.querySelector(".ai-chat-session-title");
+        const text = (titleEl && titleEl.textContent.toLowerCase()) || "";
+        el.style.display = !q || text.indexOf(q) !== -1 ? "" : "none";
+      }
+    );
   }
 
   // ─── Send message ──────────────────────────────────────────────────────────

@@ -135,11 +135,16 @@ def _can_short_circuit(intent_data: dict[str, Any]) -> bool:
     Short-circuit when:
       1. Greetings / clarifications with a short_answer already provided.
       2. High-confidence questions with no tools needed + a short_answer.
+    Never short-circuit action_request (needs proper confirmation flow).
     """
     confidence = float(intent_data.get("confidence", 0.0))
     intent_type = intent_data.get("intent", "")
     tools = intent_data.get("tools") or []
     short_answer = (intent_data.get("short_answer") or "").strip()
+
+    # Never short-circuit actions — they need the response model for confirmation cards
+    if intent_type == "action_request":
+        return False
 
     # Greetings / clarifications — always cheap
     if intent_type in _SHORT_CIRCUIT_INTENTS and short_answer:
@@ -269,4 +274,5 @@ def ask_hrms(question: str, session_id: Optional[str] = None) -> dict[str, Any]:
         "short_circuited": short_circuited,
         "tools_used": len(tool_results),
         "latency_ms": int((t1 - t0) * 1000),
+        "action_plan": answer_data.get("action_plan"),
     }
