@@ -257,9 +257,11 @@ def export_chat_data(
             if f.fieldtype not in (
                 "Section Break", "Column Break", "Tab Break",
                 "Table", "HTML", "Button", "Fold",
+                "Attach", "Attach Image", "Geolocation",
             )
             and f.fieldname
-        ][:15]
+            and not f.hidden
+        ]
 
     if "name" not in parsed_fields:
         parsed_fields.insert(0, "name")

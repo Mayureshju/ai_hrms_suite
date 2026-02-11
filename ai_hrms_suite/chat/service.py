@@ -190,7 +190,9 @@ def _extract_export_info(
     return {
         "doctype": params.get("doctype", ""),
         "filters": params.get("filters") or {},
-        "fields": params.get("fields") or [],
+        # fields intentionally empty — export_chat_data will pull ALL visible
+        # fields from DocType meta, not just the subset the LLM queried.
+        "fields": [],
         "record_count": record_count,
     }
 
