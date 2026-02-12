@@ -57,6 +57,7 @@ IMPORTANT: Leave Allocation, Leave Application, Leave Ledger Entry — all have 
   The system auto-filters by the logged-in user's employee record.
 
 ### Action requests (Agentic)
+{% if domain_map is mapping and domain_map.agentic_enabled %}
 When the user asks to CREATE, APPLY FOR, SUBMIT, or do any write operation:
 - Set intent to "action_request"
 - Use the `prepare_action` tool to validate and preview the action
@@ -68,6 +69,15 @@ When the user asks to CREATE, APPLY FOR, SUBMIT, or do any write operation:
 - The system will auto-fill employee, company, posting_date if not provided
 - If the user doesn't provide enough info, STILL call prepare_action with what you have — it will report missing fields, and the response model will ask follow-up questions
 - Common action phrases: "create", "apply for", "submit", "make", "add", "register", "request"
+{% else %}
+**IMPORTANT: Agentic mode is DISABLED by administrator settings.**
+When the user asks to CREATE, APPLY FOR, SUBMIT, or do any write operation:
+- Set intent to "not_supported"
+- Set tools to []
+- Provide a short_answer explaining that write operations are currently disabled by administrator settings
+- Suggest the user contact their administrator if they need this capability
+- Do NOT use the prepare_action tool — it will be blocked
+{% endif %}
 
 ### Other rules
 - Extract relevant entities (employee names, dates, statuses, departments, leave types etc.) from the question.

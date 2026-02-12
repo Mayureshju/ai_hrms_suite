@@ -1,0 +1,18 @@
+{
+  "doctype": "DocType",
+  "name": "AI Allowed Action DocType",
+  "module": "AI HRMS Suite",
+  "istable": 1,
+  "custom": 0,
+  "fields": [
+    {
+      "fieldname": "doctype_name",
+      "fieldtype": "Link",
+      "label": "DocType",
+      "options": "DocType",
+      "reqd": 1,
+      "in_list_view": 1
+    }
+  ],
+  "permissions": []
+}

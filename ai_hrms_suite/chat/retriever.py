@@ -137,8 +137,23 @@ def validate_doctype_in_hrms(doctype: str) -> bool:
 
 
 def build_domain_map_payload() -> str:
-    """Compact JSON payload of the domain map for the intent prompt."""
-    return json.dumps(get_hrms_domain_map(), ensure_ascii=True)
+    """
+    Compact JSON payload of the domain map for the intent prompt.
+    
+    Includes:
+    - domain_map: module → doctype-list mapping
+    - agentic_enabled: whether agentic (write) mode is enabled
+    
+    The agentic_enabled flag helps the LLM avoid planning actions
+    when they will be blocked by settings.
+    """
+    from ai_hrms_suite.utils.config import is_agentic_enabled
+    
+    payload = {
+        "domain_map": get_hrms_domain_map(),
+        "agentic_enabled": is_agentic_enabled(),
+    }
+    return json.dumps(payload, ensure_ascii=True)
 
 
 # ─── Field helpers ────────────────────────────────────────────────────────────

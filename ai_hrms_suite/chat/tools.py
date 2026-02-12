@@ -20,6 +20,7 @@ from ai_hrms_suite.chat.retriever import (
     truncate_value,
     validate_doctype_in_hrms,
 )
+from ai_hrms_suite.utils.config import is_action_allowed
 
 
 # ─── Public entry point ──────────────────────────────────────────────────────
@@ -316,10 +317,26 @@ def _tool_prepare_action(params: dict[str, Any]) -> list[dict[str, Any]]:
 
     Returns validation results and a preview of the action for user confirmation.
     The actual execution happens via the confirm_action API endpoint.
+    
+    Respects agentic settings from AI HRMS Settings:
+    - Master toggle (enable_agentic)
+    - Granular action controls (allow_create/update/submit_actions)
+    - DocType allowlist (allowed_action_doctypes)
     """
     action_type = str(params.get("action_type", "create")).strip()
     doctype = str(params.get("doctype", "")).strip()
     values = params.get("values") or {}
+
+    # ─── Check agentic settings FIRST ─────────────────────────────────────────
+    allowed, reason = is_action_allowed(action_type, doctype)
+    if not allowed:
+        return [{
+            "source_id": "action:blocked",
+            "type": "action_blocked",
+            "reason": reason,
+            "action_type": action_type,
+            "doctype": doctype,
+        }]
 
     if not doctype:
         return [_error_item("prepare_action", "DocType is required.")]

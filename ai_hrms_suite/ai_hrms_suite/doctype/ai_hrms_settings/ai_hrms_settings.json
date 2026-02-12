@@ -133,6 +133,63 @@
       "default": "0"
     },
     {
+      "fieldname": "agentic_section",
+      "fieldtype": "Section Break",
+      "label": "Agentic Options",
+      "description": "Control whether the AI chatbot can perform write operations (create, update, submit documents).",
+      "collapsible": 1
+    },
+    {
+      "fieldname": "enable_agentic",
+      "fieldtype": "Check",
+      "label": "Enable Agentic Mode",
+      "default": "0",
+      "description": "Master toggle for AI write capabilities. When disabled, the chatbot can only read data."
+    },
+    {
+      "fieldname": "col_break_agentic_1",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "allow_create_actions",
+      "fieldtype": "Check",
+      "label": "Allow Create Actions",
+      "default": "1",
+      "depends_on": "eval:doc.enable_agentic",
+      "description": "Allow AI to create new documents"
+    },
+    {
+      "fieldname": "allow_update_actions",
+      "fieldtype": "Check",
+      "label": "Allow Update Actions",
+      "default": "1",
+      "depends_on": "eval:doc.enable_agentic",
+      "description": "Allow AI to update existing documents"
+    },
+    {
+      "fieldname": "allow_submit_actions",
+      "fieldtype": "Check",
+      "label": "Allow Submit Actions",
+      "default": "0",
+      "depends_on": "eval:doc.enable_agentic",
+      "description": "Allow AI to submit documents (use with caution)"
+    },
+    {
+      "fieldname": "allowed_doctypes_section",
+      "fieldtype": "Section Break",
+      "label": "Allowed DocTypes for Actions",
+      "depends_on": "eval:doc.enable_agentic",
+      "collapsible": 1
+    },
+    {
+      "fieldname": "allowed_action_doctypes",
+      "fieldtype": "Table MultiSelect",
+      "label": "Allowed DocTypes",
+      "options": "AI Allowed Action DocType",
+      "depends_on": "eval:doc.enable_agentic",
+      "description": "Leave empty to allow all HRMS DocTypes. Add specific DocTypes to restrict actions to only those."
+    },
+    {
       "fieldname": "shortlist_section",
       "fieldtype": "Section Break",
       "label": "Shortlisting",

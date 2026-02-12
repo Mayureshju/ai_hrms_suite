@@ -166,3 +166,69 @@ def clear_settings_cache():
     """Call after saving AI HRMS Settings to bust caches."""
     frappe.cache.delete_value(_SETTINGS_CACHE_KEY)
     frappe.cache.delete_value(_POLICIES_CACHE_KEY)
+
+
+# ─── Agentic Settings ─────────────────────────────────────────────────────────
+
+
+def is_agentic_enabled() -> bool:
+    """
+    Check if agentic mode is enabled (master toggle).
+
+    Returns True only if the 'enable_agentic' setting is checked.
+    Uses cached settings to avoid database hits.
+    """
+    settings = _get_settings_doc()
+    return bool(settings.get("enable_agentic", 0))
+
+
+def is_action_allowed(action_type: str, doctype: str) -> tuple[bool, str]:
+    """
+    Check if a specific action is allowed for a DocType.
+
+    Args:
+        action_type: One of 'create', 'update', 'submit'
+        doctype: The target DocType name
+
+    Returns:
+        Tuple of (is_allowed: bool, reason: str)
+        reason is empty if allowed, contains explanation if blocked
+    """
+    settings = _get_settings_doc()
+
+    # Master toggle check
+    if not settings.get("enable_agentic", 0):
+        return False, "Agentic mode is disabled by administrator settings."
+
+    # Action type check
+    action_field_map = {
+        "create": "allow_create_actions",
+        "update": "allow_update_actions",
+        "submit": "allow_submit_actions",
+    }
+    field = action_field_map.get(action_type)
+    if field and not settings.get(field, 1):
+        return False, f"{action_type.title()} actions are disabled by administrator settings."
+
+    # DocType allowlist check
+    allowed_doctypes = _get_allowed_action_doctypes(settings)
+    if allowed_doctypes and doctype not in allowed_doctypes:
+        return False, f"Actions on {doctype} are not permitted by administrator settings."
+
+    return True, ""
+
+
+def _get_allowed_action_doctypes(settings: dict) -> set[str]:
+    """
+    Extract the set of allowed DocTypes from settings.
+
+    Returns an empty set if no restrictions (all HRMS DocTypes allowed).
+    """
+    rows = settings.get("allowed_action_doctypes") or []
+    result = set()
+    for row in rows:
+        if row:
+            dt_name = row.get("doctype_name") if isinstance(row, dict) else getattr(row, "doctype_name", None)
+            if dt_name:
+                result.add(dt_name)
+    return result
